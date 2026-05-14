@@ -8,6 +8,7 @@ import type {
 import { type EditorTheme, type TUI, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { type PolishedTuiConfig, colorize, ensureConfigExists, loadConfig } from "./config";
 import { type GitStatusSummary, emptyGitStatus, readGitStatus } from "./git";
+import { type StopProjectRefreshInterval, startProjectRefreshInterval } from "./project-refresh";
 import { type RuntimeInfo, readRuntimeInfo } from "./runtime";
 import { PolishedEditor, patchUserMessageComponent, restoreUserMessageComponent } from "./ui";
 
@@ -138,6 +139,7 @@ export default function (pi: ExtensionAPI) {
 
 	let currentConfig: PolishedTuiConfig = loadConfig();
 	let requestFooterRender: (() => void) | undefined;
+	let stopProjectRefreshInterval: StopProjectRefreshInterval = () => {};
 	let projectRefreshInFlight = false;
 	let projectRefreshPending = false;
 
@@ -288,6 +290,11 @@ export default function (pi: ExtensionAPI) {
 		patchUserMessageComponent(ctx.ui.theme);
 		installFooter(ctx);
 		installEditor(ctx);
+		stopProjectRefreshInterval();
+		stopProjectRefreshInterval = startProjectRefreshInterval(
+			currentConfig.projectRefreshIntervalMs,
+			() => scheduleProjectRefresh(ctx),
+		);
 		scheduleProjectRefresh(ctx);
 		refresh();
 	};
@@ -297,6 +304,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async () => {
+		stopProjectRefreshInterval();
+		stopProjectRefreshInterval = () => {};
 		restoreUserMessageComponent();
 	});
 

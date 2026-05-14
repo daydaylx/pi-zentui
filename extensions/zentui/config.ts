@@ -4,7 +4,11 @@ import { getAgentDir } from "@mariozechner/pi-coding-agent";
 
 export type ColorSpec = string;
 
+const DEFAULT_PROJECT_REFRESH_INTERVAL_MS = 30_000;
+const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
+
 export type PolishedTuiConfig = {
+	projectRefreshIntervalMs: number;
 	icons: {
 		cwd: string;
 		git: string;
@@ -84,6 +88,7 @@ const themeColorTokens = new Set([
 ]);
 
 export const defaultConfig: PolishedTuiConfig = {
+	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
 	icons: {
 		cwd: "󰝰",
 		git: "",
@@ -134,6 +139,18 @@ function isRecord(value: unknown): value is ConfigRecord {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function parseProjectRefreshIntervalMs(value: unknown): number {
+	if (value === 0) return 0;
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return defaultConfig.projectRefreshIntervalMs;
+	}
+
+	const interval = Math.round(value);
+	return interval >= MIN_PROJECT_REFRESH_INTERVAL_MS
+		? interval
+		: defaultConfig.projectRefreshIntervalMs;
+}
+
 export function colorize(theme: ThemeLike, color: ColorSpec, text: string): string {
 	if (themeColorTokens.has(color)) {
 		return theme.fg(color, text);
@@ -161,6 +178,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		? (config.colors as Partial<PolishedTuiConfig["colors"]>)
 		: {};
 	return {
+		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
 		icons: {
 			...defaultConfig.icons,
 			...icons,

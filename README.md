@@ -84,6 +84,7 @@ On first run, Zentui creates a config file at:
 
 ```json
 {
+  "projectRefreshIntervalMs": 30000,
   "icons": {
     "cwd": "󰝰",
     "git": "",
@@ -112,6 +113,8 @@ On first run, Zentui creates a config file at:
   }
 }
 ```
+
+`projectRefreshIntervalMs` controls how often Zentui refreshes project status (git/runtime) while Pi is idle. Set it to `0` to disable polling; invalid values or values below 5000 ms fall back to `30000`.
 
 ### Color values
 
