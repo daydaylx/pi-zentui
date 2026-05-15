@@ -17,6 +17,7 @@ import { type GitStatusSummary, emptyGitStatus, readGitStatus } from "./git";
 import { type StopProjectRefreshInterval, startProjectRefreshInterval } from "./project-refresh";
 import { type RuntimeInfo, readRuntimeInfo } from "./runtime";
 import { PolishedEditor } from "./ui";
+import { installUserMessageStyle } from "./user-message";
 
 type FooterState = GitStatusSummary & {
 	modelLabel: string;
@@ -120,12 +121,14 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	let currentConfig: PolishedTuiConfig = loadConfig();
+	let activeTheme: Theme | undefined;
 	let requestFooterRender: (() => void) | undefined;
 	let stopProjectRefreshInterval: StopProjectRefreshInterval = () => {};
 	let projectRefreshInFlight = false;
 	let projectRefreshPending = false;
 
 	const refresh = () => requestFooterRender?.();
+	const getActiveTheme = () => activeTheme;
 
 	const cleanupUi = (ctx?: ExtensionContext) => {
 		stopProjectRefreshInterval();
@@ -137,6 +140,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setEditorComponent(undefined);
 		}
+		activeTheme = undefined;
 	};
 
 	const refreshInteractiveState = (ctx: ExtensionContext, project = false) => {
@@ -289,6 +293,8 @@ export default function (pi: ExtensionAPI) {
 
 	const installUi = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
+		activeTheme = ctx.ui.theme;
+		installUserMessageStyle(getActiveTheme);
 		ensureConfigExists();
 		currentConfig = loadConfig();
 		installFooter(ctx);

@@ -23,7 +23,48 @@ function makeTheme(): Theme {
 		bold(text: string) {
 			return text;
 		},
+		italic(text: string) {
+			return text;
+		},
+		underline(text: string) {
+			return text;
+		},
+		strikethrough(text: string) {
+			return text;
+		},
 	} as Theme;
+}
+
+function makeTaggedTheme(prefix = ""): Theme {
+	return {
+		fg(color: string, text: string) {
+			return `[${prefix}${color}]${text}`;
+		},
+		bold(text: string) {
+			return `[${prefix}bold]${text}`;
+		},
+		italic(text: string) {
+			return text;
+		},
+		underline(text: string) {
+			return text;
+		},
+		strikethrough(text: string) {
+			return text;
+		},
+	} as Theme;
+}
+
+function makeUi(prefix = "") {
+	return {
+		theme: makeTaggedTheme(prefix),
+		setFooter() {},
+		setEditorComponent() {},
+	};
+}
+
+function stripPromptMarks(line: string): string {
+	return line.replaceAll(/\x1b]133;[ABC]\x07/g, "").replaceAll(/\x1b\[[0-9;]*m/g, "");
 }
 
 function loadExtension() {
@@ -64,8 +105,10 @@ function makeContext(overrides: Record<string, unknown> = {}) {
 
 afterEach(() => {
 	UserMessageComponent.prototype.render = originalUserMessageRender;
-	(UserMessageComponent.prototype as unknown as Record<string, unknown>).__zentuiUserMessagePatch =
-		undefined;
+	const prototype = UserMessageComponent.prototype as unknown as Record<string, unknown>;
+	prototype.__zentuiUserMessageOriginalRender = undefined;
+	prototype.__zentuiUserMessagePatched = undefined;
+	prototype.__zentuiUserMessageGetTheme = undefined;
 });
 
 describe("Pi docs compliance", () => {
@@ -98,14 +141,63 @@ describe("Pi docs compliance", () => {
 		await expect(emit(handlers, "session_start", ctx)).resolves.toBeUndefined();
 	});
 
-	it("does not mutate Pi's built-in UserMessageComponent prototype", async () => {
+	it("does not install user-message rendering when ctx.hasUI is false", async () => {
 		const handlers = loadExtension();
-		const ctx = makeContext();
+		const ctx = makeContext({ hasUI: false });
 
 		await emit(handlers, "session_start", ctx);
 
 		expect(UserMessageComponent.prototype.render).toBe(originalUserMessageRender);
-		await emit(handlers, "session_shutdown", ctx);
+	});
+
+	it("renders user messages like the ZentUI prompt box", async () => {
+		const handlers = loadExtension();
+		const ctx = makeContext({ ui: makeUi() });
+
+		await emit(handlers, "session_start", ctx);
+
+		const lines = new UserMessageComponent("hello **zentui**").render(44).map(stripPromptMarks);
+		const rendered = lines.join("\n");
+
+		expect(lines[0]).toMatch(/^\[border\]─+$/);
+		expect(lines.at(-1)).toMatch(/^\[border\]─+$/);
+		expect(rendered).toContain("[accent]│");
+		expect(rendered).toContain("[userMessageText]");
+		expect(rendered).toContain("[bold]");
+		expect(rendered).not.toContain("**zentui**");
+		expect(rendered).not.toContain("claude-sonnet");
+		expect(rendered).not.toContain("Anthropic");
+		expect(rendered).not.toContain("xhigh");
+	});
+
+	it("preserves OSC 133 prompt-zone markers around user-message output", async () => {
+		const handlers = loadExtension();
+		await emit(handlers, "session_start", makeContext({ ui: makeUi() }));
+
+		const lines = new UserMessageComponent("hello").render(40);
+
+		expect(lines[0].startsWith("\x1b]133;A\x07")).toBe(true);
+		expect(lines.at(-1)).toContain("\x1b]133;B\x07\x1b]133;C\x07");
+	});
+
+	it("keeps user-message output within the requested render width", async () => {
+		const handlers = loadExtension();
+		await emit(handlers, "session_start", makeContext());
+
+		const lines = new UserMessageComponent("hello ".repeat(20)).render(12).map(stripPromptMarks);
+
+		expect(lines.length).toBeGreaterThan(0);
+		expect(lines.every((line) => visibleWidth(line) <= 12)).toBe(true);
+	});
+
+	it("refreshes user-message theme state after extension reload", async () => {
+		const first = loadExtension();
+		await emit(first, "session_start", makeContext({ ui: makeUi("first:") }));
+		expect(new UserMessageComponent("hello").render(40).join("\n")).toContain("[first:accent]│");
+
+		const second = loadExtension();
+		await emit(second, "session_start", makeContext({ ui: makeUi("second:") }));
+		expect(new UserMessageComponent("hello").render(40).join("\n")).toContain("[second:accent]│");
 	});
 
 	it("keeps custom footer output within the requested render width", async () => {

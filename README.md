@@ -28,6 +28,7 @@ Zentui brings two popular aesthetics to Pi:
 - Bordered input box with accent-colored left rail
 - Model name and provider displayed inside the editor frame
 - Thinking level indicator when enabled
+- Prompt-box-style user messages matching the ZentUI input chrome
 
 ### Git Status Icons
 
