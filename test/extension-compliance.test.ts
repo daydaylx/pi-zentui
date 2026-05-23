@@ -8,7 +8,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { afterEach, describe, expect, it } from "vitest";
-import { type PolishedTuiConfig, defaultConfig } from "../extensions/zentui/config";
+import {
+	type ExtensionStatusPlacement,
+	type PolishedTuiConfig,
+	defaultConfig,
+} from "../extensions/zentui/config";
 import { installFooter } from "../extensions/zentui/footer";
 import { emptyGitStatus } from "../extensions/zentui/git";
 import zentui from "../extensions/zentui/index";
@@ -157,6 +161,22 @@ function configWithColors(
 		colorSources: {
 			...defaultConfig.colorSources,
 			...colorSources,
+		},
+	};
+}
+
+function configWithExtensionStatuses(
+	extensionStatuses: Partial<PolishedTuiConfig["extensionStatuses"]>,
+): PolishedTuiConfig {
+	return {
+		...defaultConfig,
+		extensionStatuses: {
+			...defaultConfig.extensionStatuses,
+			...extensionStatuses,
+			placements: {
+				...defaultConfig.extensionStatuses.placements,
+				...(extensionStatuses.placements ?? {}),
+			},
 		},
 	};
 }
@@ -459,6 +479,7 @@ describe("Pi docs compliance", () => {
 		expect(footerFactory).toBeTypeOf("function");
 		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
 			onBranchChange: () => () => {},
+			getExtensionStatuses: () => new Map<string, string>(),
 		});
 		const lines = footer?.render(1) ?? [];
 
@@ -491,10 +512,199 @@ describe("Pi docs compliance", () => {
 
 		const footer = footerFactory?.({ requestRender() {} }, makeStrictTheme(), {
 			onBranchChange: () => () => {},
+			getExtensionStatuses: () => new Map<string, string>(),
 		});
 
 		expect(() => footer?.render(120)).not.toThrow();
 		expect(footer?.render(120).join("\n")).toContain("[muted]");
+	});
+
+	it("renders third-party statuses on the right by default in sorted order", () => {
+		let footerFactory: FooterFactory | undefined;
+		const ctx = makeContext({
+			cwd: "/tmp/project",
+			ui: {
+				theme: makeTheme(),
+				setFooter(factory: FooterFactory | undefined) {
+					footerFactory = factory;
+				},
+				setEditorComponent() {},
+			},
+		});
+		const state = createInitialState(emptyGitStatus());
+		state.contextLabel = "1%/200k";
+		state.tokenLabel = "↑1 ↓2";
+		state.costLabel = "$0.001";
+
+		installFooter(ctx as never, state, () => defaultConfig, {
+			setRequestRender() {},
+			scheduleProjectRefresh() {},
+		});
+
+		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
+			onBranchChange: () => () => {},
+			getExtensionStatuses: () =>
+				new Map<string, string>([
+					["zeta", "Z"],
+					["alpha", "A"],
+				]),
+		});
+		const rendered = footer?.render(160).join("\n") ?? "";
+
+		expect(rendered.indexOf("A")).toBeLessThan(rendered.indexOf("Z"));
+		expect(rendered.indexOf("Z")).toBeLessThan(rendered.indexOf("1%/200k"));
+		expect(rendered).toContain("↑1 ↓2");
+		expect(rendered).toContain("$0.001");
+	});
+
+	it("honors third-party status placements and hides off statuses", () => {
+		let footerFactory: FooterFactory | undefined;
+		const ctx = makeContext({
+			cwd: "/tmp/project",
+			ui: {
+				theme: makeTheme(),
+				setFooter(factory: FooterFactory | undefined) {
+					footerFactory = factory;
+				},
+				setEditorComponent() {},
+			},
+		});
+		const state = createInitialState(emptyGitStatus());
+		state.contextLabel = "1%/200k";
+		state.tokenLabel = "↑1 ↓2";
+		state.costLabel = "$0.001";
+		const config = configWithExtensionStatuses({
+			placements: {
+				alpha: "left",
+				beta: "middle",
+				gamma: "right",
+				hidden: "off",
+			},
+		});
+
+		installFooter(ctx as never, state, () => config, {
+			setRequestRender() {},
+			scheduleProjectRefresh() {},
+		});
+
+		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
+			onBranchChange: () => () => {},
+			getExtensionStatuses: () =>
+				new Map<string, string>([
+					["alpha", "left-status"],
+					["beta", "middle-status"],
+					["gamma", "right-status"],
+					["hidden", "hidden-status"],
+				]),
+		});
+		const rendered = footer?.render(180).join("\n") ?? "";
+
+		expect(rendered).toContain("left-status");
+		expect(rendered).toContain(" | left-status");
+		expect(rendered).toContain("middle-status");
+		expect(rendered).toContain("right-status");
+		expect(rendered).not.toContain("hidden-status");
+	});
+
+	it("strips plugin ANSI and control sequences before rendering third-party statuses", () => {
+		let footerFactory: FooterFactory | undefined;
+		const ctx = makeContext({
+			cwd: "/tmp/project",
+			ui: {
+				theme: makeTheme(),
+				setFooter(factory: FooterFactory | undefined) {
+					footerFactory = factory;
+				},
+				setEditorComponent() {},
+			},
+		});
+		const state = createInitialState(emptyGitStatus());
+		state.contextLabel = "1%/200k";
+		state.tokenLabel = "↑1 ↓2";
+		state.costLabel = "$0.001";
+
+		installFooter(ctx as never, state, () => defaultConfig, {
+			setRequestRender() {},
+			scheduleProjectRefresh() {},
+		});
+
+		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
+			onBranchChange: () => () => {},
+			getExtensionStatuses: () =>
+				new Map<string, string>([["ansi", "\x1b[31mred\x1b[0m\nnext\tline"]]),
+		});
+		const rendered = footer?.render(160).join("\n") ?? "";
+
+		expect(rendered).toContain("red next line");
+		expect(rendered).not.toContain("\x1b[31m");
+		expect(rendered).not.toContain("\nnext\tline");
+	});
+
+	it("styles third-party statuses with colors.extensionStatus", () => {
+		let footerFactory: FooterFactory | undefined;
+		const ctx = makeContext({
+			cwd: "/tmp/project",
+			ui: {
+				theme: makeTaggedTheme(),
+				setFooter(factory: FooterFactory | undefined) {
+					footerFactory = factory;
+				},
+				setEditorComponent() {},
+			},
+		});
+		const state = createInitialState(emptyGitStatus());
+		state.contextLabel = "1%/200k";
+		state.tokenLabel = "↑1 ↓2";
+		state.costLabel = "$0.001";
+
+		installFooter(ctx as never, state, () => configWithColors({ extensionStatus: "warning" }), {
+			setRequestRender() {},
+			scheduleProjectRefresh() {},
+		});
+
+		const footer = footerFactory?.({ requestRender() {} }, makeTaggedTheme(), {
+			onBranchChange: () => () => {},
+			getExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
+		});
+		const rendered = footer?.render(160).join("\n") ?? "";
+
+		expect(rendered).toContain("[warning]ok");
+	});
+
+	it("protects built-in right labels when third-party middle statuses are too wide", () => {
+		let footerFactory: FooterFactory | undefined;
+		const ctx = makeContext({
+			cwd: "/tmp/x",
+			ui: {
+				theme: makeTheme(),
+				setFooter(factory: FooterFactory | undefined) {
+					footerFactory = factory;
+				},
+				setEditorComponent() {},
+			},
+		});
+		const state = createInitialState(emptyGitStatus());
+		state.contextLabel = "1%/200k";
+		state.tokenLabel = "↑1 ↓2";
+		state.costLabel = "$0.001";
+		const config = configWithExtensionStatuses({ placements: { long: "middle" } });
+
+		installFooter(ctx as never, state, () => config, {
+			setRequestRender() {},
+			scheduleProjectRefresh() {},
+		});
+
+		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
+			onBranchChange: () => () => {},
+			getExtensionStatuses: () =>
+				new Map<string, string>([["long", "middle-status-is-far-too-long"]]),
+		});
+		const line = footer?.render(44)[0] ?? "";
+
+		expect(line).toContain("1%/200k");
+		expect(line).toContain("↑1 ↓2");
+		expect(line).toContain("$0.001");
+		expect(visibleWidth(line)).toBeLessThanOrEqual(44);
 	});
 
 	it("does not leave an extra branch gap when the git icon is empty", () => {
@@ -525,6 +735,7 @@ describe("Pi docs compliance", () => {
 
 		const footer = footerFactory?.({ requestRender() {} }, makeTheme(), {
 			onBranchChange: () => () => {},
+			getExtensionStatuses: () => new Map<string, string>(),
 		});
 		const rendered = footer?.render(120).join("\n") ?? "";
 
@@ -669,6 +880,8 @@ describe("Pi docs compliance", () => {
 			{
 				getConfig: () => defaultConfig,
 				setColorSources() {},
+				getActiveExtensionStatuses: () => new Map<string, string>(),
+				setExtensionStatusPlacement() {},
 				requestRender() {},
 			},
 		);
@@ -703,6 +916,8 @@ describe("Pi docs compliance", () => {
 				{
 					getConfig: () => config,
 					setColorSources() {},
+					getActiveExtensionStatuses: () => new Map<string, string>(),
+					setExtensionStatusPlacement() {},
 					requestRender() {},
 					settingsListTheme: {
 						label: (text) => text,
@@ -754,6 +969,8 @@ describe("Pi docs compliance", () => {
 			{
 				getConfig: () => defaultConfig,
 				setColorSources() {},
+				getActiveExtensionStatuses: () => new Map<string, string>(),
+				setExtensionStatusPlacement() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -800,6 +1017,8 @@ describe("Pi docs compliance", () => {
 				setColorSources(patch) {
 					changes.push(patch);
 				},
+				getActiveExtensionStatuses: () => new Map<string, string>(),
+				setExtensionStatusPlacement() {},
 				requestRender() {
 					dependencyRenderRequests += 1;
 				},
@@ -859,6 +1078,8 @@ describe("Pi docs compliance", () => {
 				setColorSources(patch) {
 					changes.push(patch);
 				},
+				getActiveExtensionStatuses: () => new Map<string, string>(),
+				setExtensionStatusPlacement() {},
 				requestRender() {},
 				settingsListTheme: {
 					label: (text) => text,
@@ -890,5 +1111,219 @@ describe("Pi docs compliance", () => {
 		expect(rendered).toContain("Editor + previous messages");
 		expect(rendered).toContain("mixed");
 		expect(changes).toEqual([{ editor: "theme", userMessages: "theme" }]);
+	});
+
+	it("renders the third-party statuses settings entry with active count", async () => {
+		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
+		let rendered = "";
+
+		registerZentuiSettingsCommand(
+			{
+				registerCommand(_name: string, options: unknown) {
+					command = options as typeof command;
+				},
+			} as never,
+			{
+				getConfig: () => defaultConfig,
+				setColorSources() {},
+				getActiveExtensionStatuses: () =>
+					new Map<string, string>([
+						["alpha", "A"],
+						["beta", "B"],
+					]),
+				setExtensionStatusPlacement() {},
+				requestRender() {},
+				settingsListTheme: {
+					label: (text) => text,
+					value: (text) => text,
+					description: (text) => text,
+					cursor: "> ",
+					hint: (text) => text,
+				},
+			},
+		);
+
+		await command?.handler("", {
+			hasUI: true,
+			ui: {
+				theme: makeTaggedTheme(),
+				notify() {},
+				async custom(factory: (...args: unknown[]) => unknown) {
+					const component = factory({ requestRender() {} }, makeTaggedTheme(), {}, () => {}) as {
+						render?: (width: number) => string[];
+					};
+					rendered = component.render?.(80).join("\n") ?? "";
+				},
+			},
+		});
+
+		expect(rendered).toContain("Third-party statuses");
+		expect(rendered).toContain("2 active");
+	});
+
+	it("shows a read-only empty third-party status submenu", async () => {
+		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
+		let rendered = "";
+		const placements: Array<{ key: string; placement: ExtensionStatusPlacement }> = [];
+
+		registerZentuiSettingsCommand(
+			{
+				registerCommand(_name: string, options: unknown) {
+					command = options as typeof command;
+				},
+			} as never,
+			{
+				getConfig: () => defaultConfig,
+				setColorSources() {},
+				getActiveExtensionStatuses: () => new Map<string, string>(),
+				setExtensionStatusPlacement(key, placement) {
+					placements.push({ key, placement });
+				},
+				requestRender() {},
+				settingsListTheme: {
+					label: (text) => text,
+					value: (text) => text,
+					description: (text) => text,
+					cursor: "> ",
+					hint: (text) => text,
+				},
+			},
+		);
+
+		await command?.handler("", {
+			hasUI: true,
+			ui: {
+				theme: makeTaggedTheme(),
+				notify() {},
+				async custom(factory: (...args: unknown[]) => unknown) {
+					const component = factory({ requestRender() {} }, makeTaggedTheme(), {}, () => {}) as {
+						render?: (width: number) => string[];
+						handleInput?: (data: string) => void;
+					};
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.(" ");
+					rendered = component.render?.(120).join("\n") ?? "";
+					component.handleInput?.("\x1b");
+				},
+			},
+		});
+
+		expect(rendered).toContain("No third-party statuses are active");
+		expect(rendered).toContain("ctx.ui.setStatus()");
+		expect(placements).toEqual([]);
+	});
+
+	it("cycles active third-party status placement from the submenu", async () => {
+		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
+		const placements: Array<{ key: string; placement: ExtensionStatusPlacement }> = [];
+		let dependencyRenderRequests = 0;
+		let tuiRenderRequests = 0;
+
+		registerZentuiSettingsCommand(
+			{
+				registerCommand(_name: string, options: unknown) {
+					command = options as typeof command;
+				},
+			} as never,
+			{
+				getConfig: () => defaultConfig,
+				setColorSources() {},
+				getActiveExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
+				setExtensionStatusPlacement(key, placement) {
+					placements.push({ key, placement });
+				},
+				requestRender() {
+					dependencyRenderRequests += 1;
+				},
+				settingsListTheme: {
+					label: (text) => text,
+					value: (text) => text,
+					description: (text) => text,
+					cursor: "> ",
+					hint: (text) => text,
+				},
+			},
+		);
+
+		await command?.handler("", {
+			hasUI: true,
+			ui: {
+				theme: makeTaggedTheme(),
+				notify() {},
+				async custom(factory: (...args: unknown[]) => unknown) {
+					const component = factory(
+						{
+							requestRender() {
+								tuiRenderRequests += 1;
+							},
+						},
+						makeTaggedTheme(),
+						{},
+						() => {},
+					) as { handleInput?: (data: string) => void };
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.(" ");
+					component.handleInput?.(" ");
+				},
+			},
+		});
+
+		expect(placements).toEqual([{ key: "alpha", placement: "off" }]);
+		expect(dependencyRenderRequests).toBe(1);
+		expect(tuiRenderRequests).toBe(1);
+	});
+
+	it("does not show inactive saved placements in the third-party status submenu", async () => {
+		let command: { handler: (args: string, ctx: unknown) => Promise<void> } | undefined;
+		let rendered = "";
+
+		registerZentuiSettingsCommand(
+			{
+				registerCommand(_name: string, options: unknown) {
+					command = options as typeof command;
+				},
+			} as never,
+			{
+				getConfig: () =>
+					configWithExtensionStatuses({
+						placements: { active: "middle", inactive: "left" },
+					}),
+				setColorSources() {},
+				getActiveExtensionStatuses: () => new Map<string, string>([["active", "ok"]]),
+				setExtensionStatusPlacement() {},
+				requestRender() {},
+				settingsListTheme: {
+					label: (text) => text,
+					value: (text) => text,
+					description: (text) => text,
+					cursor: "> ",
+					hint: (text) => text,
+				},
+			},
+		);
+
+		await command?.handler("", {
+			hasUI: true,
+			ui: {
+				theme: makeTaggedTheme(),
+				notify() {},
+				async custom(factory: (...args: unknown[]) => unknown) {
+					const component = factory({ requestRender() {} }, makeTaggedTheme(), {}, () => {}) as {
+						render?: (width: number) => string[];
+						handleInput?: (data: string) => void;
+					};
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.("\x1b[B");
+					component.handleInput?.(" ");
+					rendered = component.render?.(80).join("\n") ?? "";
+				},
+			},
+		});
+
+		expect(rendered).toContain("active");
+		expect(rendered).toContain("middle");
+		expect(rendered).not.toContain("inactive");
 	});
 });

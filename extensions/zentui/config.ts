@@ -12,6 +12,13 @@ export type ColorSourcesConfig = {
 	userMessages: ColorSource;
 };
 
+export type ExtensionStatusPlacement = "off" | "left" | "middle" | "right";
+
+export type ExtensionStatusesConfig = {
+	defaultPlacement: ExtensionStatusPlacement;
+	placements: Record<string, ExtensionStatusPlacement>;
+};
+
 const DEFAULT_PROJECT_REFRESH_INTERVAL_MS = 30_000;
 const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
 
@@ -43,6 +50,7 @@ export type PolishedTuiConfig = {
 		cost: ColorSpec;
 		separator: ColorSpec;
 		runtimePrefix: ColorSpec;
+		extensionStatus: ColorSpec;
 		editorAccent?: ColorSpec;
 		editorBorder?: ColorSpec;
 		editorModel?: ColorSpec;
@@ -55,6 +63,7 @@ export type PolishedTuiConfig = {
 		editorThinkingXhigh?: ColorSpec;
 	};
 	colorSources: ColorSourcesConfig;
+	extensionStatuses: ExtensionStatusesConfig;
 };
 
 export const configPath = join(getAgentDir(), "zentui.json");
@@ -87,11 +96,16 @@ export const defaultConfig: PolishedTuiConfig = {
 		cost: "bold green",
 		separator: "bright-black",
 		runtimePrefix: "",
+		extensionStatus: "bright-black",
 	},
 	colorSources: {
 		starship: "theme",
 		editor: "theme",
 		userMessages: "theme",
+	},
+	extensionStatuses: {
+		defaultPlacement: "right",
+		placements: {},
 	},
 };
 
@@ -178,6 +192,7 @@ function normalizeColors(record: Record<string, unknown>): Partial<PolishedTuiCo
 		cost: colorValue(record, "cost"),
 		separator: colorValue(record, "separator"),
 		runtimePrefix: colorValue(record, "runtimePrefix"),
+		extensionStatus: colorValue(record, "extensionStatus"),
 		editorAccent: colorValue(record, "editorAccent"),
 		editorBorder: colorValue(record, "editorBorder"),
 		editorModel: colorValue(record, "editorModel"),
@@ -196,6 +211,29 @@ function normalizeColorSources(record: Record<string, unknown>): ColorSourcesCon
 		starship: colorSourceValue(record, "starship"),
 		editor: colorSourceValue(record, "editor"),
 		userMessages: colorSourceValue(record, "userMessages"),
+	};
+}
+
+export function isExtensionStatusPlacement(value: unknown): value is ExtensionStatusPlacement {
+	return value === "off" || value === "left" || value === "middle" || value === "right";
+}
+
+function normalizeExtensionStatuses(record: Record<string, unknown>): ExtensionStatusesConfig {
+	const defaultPlacement = isExtensionStatusPlacement(record.defaultPlacement)
+		? record.defaultPlacement
+		: defaultConfig.extensionStatuses.defaultPlacement;
+	const placements = isRecord(record.placements)
+		? Object.fromEntries(
+				Object.entries(record.placements).filter(
+					(entry): entry is [string, ExtensionStatusPlacement] =>
+						isExtensionStatusPlacement(entry[1]),
+				),
+			)
+		: {};
+
+	return {
+		defaultPlacement,
+		placements,
 	};
 }
 
@@ -240,6 +278,9 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 	const colorSources = isRecord(config.colorSources)
 		? normalizeColorSources(config.colorSources as Record<string, unknown>)
 		: defaultConfig.colorSources;
+	const extensionStatuses = isRecord(config.extensionStatuses)
+		? normalizeExtensionStatuses(config.extensionStatuses as Record<string, unknown>)
+		: defaultConfig.extensionStatuses;
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
 		icons: {
@@ -251,7 +292,18 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 			...colors,
 		},
 		colorSources: { ...colorSources },
+		extensionStatuses: {
+			defaultPlacement: extensionStatuses.defaultPlacement,
+			placements: { ...extensionStatuses.placements },
+		},
 	};
+}
+
+export function getExtensionStatusPlacement(
+	config: PolishedTuiConfig,
+	key: string,
+): ExtensionStatusPlacement {
+	return config.extensionStatuses.placements[key] ?? config.extensionStatuses.defaultPlacement;
 }
 
 export function loadConfig(): PolishedTuiConfig {
@@ -274,6 +326,34 @@ export function saveColorSourcesPatch(
 	record.colorSources = {
 		...existing,
 		...validColorSourceEntries(patch),
+	};
+	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+	return mergeConfig(record);
+}
+
+export function saveExtensionStatusPlacement(
+	key: string,
+	placement: ExtensionStatusPlacement,
+	path = configPath,
+): PolishedTuiConfig {
+	const record = readConfigRecord(path);
+	const existingExtensionStatuses = isRecord(record.extensionStatuses)
+		? { ...(record.extensionStatuses as Record<string, unknown>) }
+		: {};
+	const existingPlacements = isRecord(existingExtensionStatuses.placements)
+		? { ...(existingExtensionStatuses.placements as Record<string, unknown>) }
+		: {};
+
+	Object.defineProperty(existingPlacements, key, {
+		value: placement,
+		enumerable: true,
+		configurable: true,
+		writable: true,
+	});
+
+	record.extensionStatuses = {
+		...existingExtensionStatuses,
+		placements: existingPlacements,
 	};
 	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
 	return mergeConfig(record);

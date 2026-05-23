@@ -2,7 +2,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultConfig, mergeConfig, saveColorSourcesPatch } from "../extensions/zentui/config";
+import {
+	defaultConfig,
+	mergeConfig,
+	saveColorSourcesPatch,
+	saveExtensionStatusPlacement,
+} from "../extensions/zentui/config";
 import {
 	colorize,
 	renderChromeBorder,
@@ -18,12 +23,17 @@ describe("mergeConfig", () => {
 		expect(config.colors.gitBranch).toBe("bold purple");
 		expect(config.colors.contextNormal).toBe("bright-black");
 		expect(config.colors.tokens).toBe("bright-black");
+		expect(config.colors.extensionStatus).toBe("bright-black");
 		expect(config.colors.editorAccent).toBeUndefined();
 		expect(config.colors.editorBorder).toBeUndefined();
 		expect(config.colorSources).toEqual({
 			starship: "theme",
 			editor: "theme",
 			userMessages: "theme",
+		});
+		expect(config.extensionStatuses).toEqual({
+			defaultPlacement: "right",
+			placements: {},
 		});
 	});
 
@@ -49,6 +59,56 @@ describe("mergeConfig", () => {
 		expect(mergeConfig({ colors: { git: "syntaxKeyword" } }).colors.gitBranch).toBe(
 			"syntaxKeyword",
 		);
+		expect(mergeConfig({ colors: { extensionStatus: "warning" } }).colors.extensionStatus).toBe(
+			"warning",
+		);
+		expect(mergeConfig({ colors: { extensionStatus: "neon" } }).colors.extensionStatus).toBe(
+			defaultConfig.colors.extensionStatus,
+		);
+	});
+
+	it("accepts extension status placement config", () => {
+		const config = mergeConfig({
+			extensionStatuses: {
+				defaultPlacement: "middle",
+				placements: {
+					alpha: "left",
+					beta: "off",
+					gamma: "right",
+				},
+			},
+		});
+
+		expect(config.extensionStatuses).toEqual({
+			defaultPlacement: "middle",
+			placements: {
+				alpha: "left",
+				beta: "off",
+				gamma: "right",
+			},
+		});
+	});
+
+	it("normalizes invalid extension status placement config", () => {
+		expect(
+			mergeConfig({
+				extensionStatuses: {
+					defaultPlacement: "center",
+					placements: {
+						alpha: "left",
+						beta: "center",
+						gamma: 1,
+					},
+				},
+			}).extensionStatuses,
+		).toEqual({
+			defaultPlacement: "right",
+			placements: { alpha: "left" },
+		});
+		expect(mergeConfig({ extensionStatuses: { placements: "none" } }).extensionStatuses).toEqual({
+			defaultPlacement: "right",
+			placements: {},
+		});
 	});
 
 	it("accepts optional editor and user-message chrome color overrides", () => {
@@ -223,6 +283,70 @@ describe("mergeConfig", () => {
 				userMessages: "theme",
 			});
 			expect(raw).toEqual({ colorSources: { starship: "terminal" } });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("saves extension status placement when creating zentui.json", () => {
+		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const path = join(dir, "zentui.json");
+		try {
+			const config = saveExtensionStatusPlacement("plugin.key", "middle", path);
+			const raw = JSON.parse(readFileSync(path, "utf8"));
+
+			expect(config.extensionStatuses.placements).toEqual({ "plugin.key": "middle" });
+			expect(raw).toEqual({
+				extensionStatuses: {
+					placements: {
+						"plugin.key": "middle",
+					},
+				},
+			});
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("saves extension status placement without erasing unknown user config", () => {
+		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const path = join(dir, "zentui.json");
+		try {
+			writeFileSync(
+				path,
+				`${JSON.stringify(
+					{
+						unknown: true,
+						colors: { futureKey: "future" },
+						extensionStatuses: {
+							defaultPlacement: "left",
+							futureKey: "future",
+							placements: {
+								alpha: "right",
+								invalid: "center",
+							},
+						},
+					},
+					null,
+					2,
+				)}\n`,
+			);
+
+			const config = saveExtensionStatusPlacement("beta", "off", path);
+			const raw = JSON.parse(readFileSync(path, "utf8"));
+
+			expect(config.extensionStatuses).toEqual({
+				defaultPlacement: "left",
+				placements: { alpha: "right", beta: "off" },
+			});
+			expect(raw.unknown).toBe(true);
+			expect(raw.colors.futureKey).toBe("future");
+			expect(raw.extensionStatuses.futureKey).toBe("future");
+			expect(raw.extensionStatuses.placements).toEqual({
+				alpha: "right",
+				invalid: "center",
+				beta: "off",
+			});
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

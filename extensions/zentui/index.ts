@@ -7,10 +7,12 @@ import type {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import {
 	type ColorSourcesConfig,
+	type ExtensionStatusPlacement,
 	type PolishedTuiConfig,
 	ensureConfigExists,
 	loadConfig,
 	saveColorSourcesPatch,
+	saveExtensionStatusPlacement,
 } from "./config";
 import { installFooter } from "./footer";
 import { emptyGitStatus, readGitStatus } from "./git";
@@ -28,6 +30,7 @@ export default function (pi: ExtensionAPI) {
 	let currentConfig: PolishedTuiConfig = loadConfig();
 	let activeTheme: Theme | undefined;
 	let requestFooterRender: (() => void) | undefined;
+	let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
 	let stopRefreshInterval: StopProjectRefreshInterval = () => {};
 	let cleanupPrototypePatches: () => void = () => {};
 	let projectRefreshInFlight = false;
@@ -109,6 +112,9 @@ export default function (pi: ExtensionAPI) {
 				requestFooterRender = fn;
 			},
 			scheduleProjectRefresh,
+			setExtensionStatusesGetter(fn) {
+				getActiveExtensionStatuses = fn ?? (() => new Map());
+			},
 		});
 		installEditor(ctx);
 		stopRefreshInterval = startProjectRefreshInterval(currentConfig.projectRefreshIntervalMs, () =>
@@ -126,6 +132,7 @@ export default function (pi: ExtensionAPI) {
 		projectRefreshInFlight = false;
 		projectRefreshPending = false;
 		requestFooterRender = undefined;
+		getActiveExtensionStatuses = () => new Map();
 		if (ctx?.hasUI) {
 			ctx.ui.setFooter(undefined);
 			ctx.ui.setEditorComponent(undefined);
@@ -141,6 +148,12 @@ export default function (pi: ExtensionAPI) {
 		getConfig: getCurrentConfig,
 		setColorSources(patch: Partial<ColorSourcesConfig>) {
 			currentConfig = saveColorSourcesPatch(patch);
+		},
+		getActiveExtensionStatuses() {
+			return getActiveExtensionStatuses();
+		},
+		setExtensionStatusPlacement(key: string, placement: ExtensionStatusPlacement) {
+			currentConfig = saveExtensionStatusPlacement(key, placement);
 		},
 		requestRender() {
 			refresh();

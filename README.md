@@ -22,6 +22,8 @@ Zentui brings two popular aesthetics to Pi:
 - `[!?↑]` — git status indicators (modified, untracked, ahead/behind, stashed, etc.)
 - `via  v5.5.0` — runtime detection with version and Starship-style Nerd Font runtime/language modules
 - Right side shows context usage, token counts, and cost
+- Third-party Pi extension statuses from `ctx.ui.setStatus()` can be shown on the left,
+  middle, or right side, or hidden per status key from `/zentui`
 
 ### Editor (Opencode-inspired)
 
@@ -121,7 +123,7 @@ pi install git:github.com/lmilojevicc/pi-zentui
 
 ## Config
 
-User config lives at `~/.pi/agent/zentui.json`. The file is optional: missing or invalid known values fall back to Zentui defaults, unknown keys are ignored at runtime, and `/zentui` currently patches only color-source settings.
+User config lives at `~/.pi/agent/zentui.json`. The file is optional: missing or invalid known values fall back to Zentui defaults, unknown keys are ignored at runtime, and `/zentui` can patch color-source settings plus active third-party status placements.
 
 Default config values — copy this and change any value you want:
 
@@ -152,6 +154,7 @@ Default config values — copy this and change any value you want:
 		"contextError": "bold red",
 		"tokens": "bright-black",
 		"cost": "bold green",
+		"extensionStatus": "bright-black",
 		"separator": "bright-black",
 		"runtimePrefix": "",
 		"editorAccent": "accent",
@@ -169,6 +172,10 @@ Default config values — copy this and change any value you want:
 		"starship": "theme",
 		"editor": "theme",
 		"userMessages": "theme"
+	},
+	"extensionStatuses": {
+		"defaultPlacement": "right",
+		"placements": {}
 	}
 }
 ```
@@ -177,6 +184,7 @@ Default config values — copy this and change any value you want:
 - `projectRefreshIntervalMs`: project status polling interval; `0` disables polling.
 - `icons`: every shown icon key is configurable; omit any key to use the Zentui default.
 - `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/zentui` switches these sources; manual JSON controls specific style values.
+- `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. `/zentui` lists only statuses that are currently active.
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Zentui's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the active editor rail and previous user-message rail.
 - `editorBorder` styles the active editor and previous user-message top/bottom border color only; the border glyph stays `─`.
