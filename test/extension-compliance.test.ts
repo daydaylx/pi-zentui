@@ -19,7 +19,7 @@ import zentui from "../extensions/zentui/index";
 import { patchSelectorBorderStyle } from "../extensions/zentui/selector-border";
 import { registerZentuiSettingsCommand } from "../extensions/zentui/settings-command";
 import { createInitialState } from "../extensions/zentui/state";
-import { PolishedEditor } from "../extensions/zentui/ui";
+import { PolishedEditor, WrappedPolishedEditor } from "../extensions/zentui/ui";
 import { installUserMessageStyle } from "../extensions/zentui/user-message";
 
 type Handler = (event: unknown, ctx: unknown) => unknown | Promise<unknown>;
@@ -318,9 +318,15 @@ describe("Pi docs compliance", () => {
 		expect(UserMessageComponent.prototype.render).toBe(originalUserMessageRender);
 	});
 
-	it("does not overwrite an editor component already installed by another extension", async () => {
+	it("wraps an editor component already installed by another extension", async () => {
 		const handlers = loadExtension();
-		const existingEditorFactory = () => ({ render: () => [] });
+		const existingEditorFactory = () => ({
+			render: (width: number) => ["─".repeat(width), "base editor", "─".repeat(width)],
+			invalidate() {},
+			handleInput() {},
+			getText: () => "",
+			setText() {},
+		});
 		let editorFactory: unknown = existingEditorFactory;
 		let setEditorCalls = 0;
 		const ctx = makeContext({
@@ -339,8 +345,90 @@ describe("Pi docs compliance", () => {
 
 		await emit(handlers, "session_start", ctx);
 
-		expect(setEditorCalls).toBe(0);
+		expect(setEditorCalls).toBe(1);
+		expect(editorFactory).not.toBe(existingEditorFactory);
+		expect(editorFactory).toBeTypeOf("function");
+		const editor = (
+			editorFactory as (...args: unknown[]) => ReturnType<typeof existingEditorFactory>
+		)(
+			{ requestRender() {}, terminal: { rows: 24, cols: 80 } } as never,
+			{ borderColor: (text: string) => text, selectList: {} } as never,
+			{} as never,
+		);
+		expect(editor.render(80).join("\n")).toContain("base editor");
+	});
+
+	it("restores a wrapped editor component on shutdown", async () => {
+		const handlers = loadExtension();
+		const existingEditorFactory = () => ({
+			render: (width: number) => ["─".repeat(width), "base editor", "─".repeat(width)],
+			invalidate() {},
+			handleInput() {},
+			getText: () => "",
+			setText() {},
+		});
+		let editorFactory: unknown = existingEditorFactory;
+		const ctx = makeContext({
+			ui: {
+				theme: makeTheme(),
+				setFooter() {},
+				setEditorComponent(factory: unknown) {
+					editorFactory = factory;
+				},
+				getEditorComponent() {
+					return editorFactory;
+				},
+			},
+		});
+
+		await emit(handlers, "session_start", ctx);
+		expect(editorFactory).not.toBe(existingEditorFactory);
+
+		await emit(handlers, "session_shutdown", ctx);
+
 		expect(editorFactory).toBe(existingEditorFactory);
+	});
+
+	it("re-wraps an editor component that loads after Zentui", async () => {
+		const handlers = loadExtension();
+		const laterEditorFactory = () => ({
+			render: (width: number) => ["─".repeat(width), "late vim editor", "─".repeat(width)],
+			invalidate() {},
+			handleInput() {},
+			getText: () => "",
+			setText() {},
+			getMode: () => "normal",
+		});
+		let editorFactory: unknown;
+		const ctx = makeContext({
+			ui: {
+				theme: makeTheme(),
+				setFooter() {},
+				setEditorComponent(factory: unknown) {
+					editorFactory = factory;
+				},
+				getEditorComponent() {
+					return editorFactory;
+				},
+			},
+		});
+
+		await emit(handlers, "session_start", ctx);
+		const originalZentuiFactory = editorFactory;
+		editorFactory = laterEditorFactory;
+
+		await new Promise((resolve) => setTimeout(resolve, 1));
+
+		expect(editorFactory).not.toBe(originalZentuiFactory);
+		expect(editorFactory).not.toBe(laterEditorFactory);
+		expect(editorFactory).toBeTypeOf("function");
+		const editor = (editorFactory as (...args: unknown[]) => ReturnType<typeof laterEditorFactory>)(
+			{ requestRender() {}, terminal: { rows: 24, cols: 80 } } as never,
+			{ borderColor: (text: string) => text, selectList: {} } as never,
+			{} as never,
+		);
+		expect(editor.render(80).join("\n")).toContain("late vim editor");
+		expect(editor.render(80).join("\n")).toContain("NORMAL");
 	});
 
 	it("renders user messages like the ZentUI prompt box", () => {
@@ -955,6 +1043,86 @@ describe("Pi docs compliance", () => {
 		const rendered = editor.render(120).join("\n");
 
 		expect(rendered).toContain("[thinkingText]low");
+	});
+
+	it("wraps a vim editor by delegating input and rendering a mode segment", () => {
+		const inputs: string[] = [];
+		let text = "hello";
+		let mode = "normal";
+		const base = {
+			render(width: number) {
+				return ["─".repeat(width), text, `${"─".repeat(Math.max(0, width - 8))} NORMAL `];
+			},
+			invalidate() {},
+			handleInput(data: string) {
+				inputs.push(data);
+				if (data === "i") mode = "insert";
+			},
+			getText() {
+				return text;
+			},
+			setText(next: string) {
+				text = next;
+			},
+			getMode() {
+				return mode;
+			},
+		};
+		const editor = new WrappedPolishedEditor(
+			base,
+			makeTaggedTheme(),
+			() => defaultConfig,
+			() => ({ modelLabel: "claude-sonnet", providerLabel: "Anthropic" }),
+			() => "off",
+		);
+
+		editor.handleInput("i");
+		editor.setText("changed");
+		const rendered = editor.render(120).join("\n");
+
+		expect(inputs).toEqual(["i"]);
+		expect(editor.getText()).toBe("changed");
+		expect(rendered).toContain("changed");
+		expect(rendered).toContain("[success]INSERT");
+		expect(rendered).toMatch(/ {2,}\[success\]INSERT/);
+		expect(rendered).toContain("[accent]claude-sonnet");
+	});
+
+	it("proxies mutable editor callbacks and app-action state to the wrapped editor", () => {
+		const base = {
+			render: (width: number) => ["─".repeat(width), "", "─".repeat(width)],
+			invalidate() {},
+			handleInput() {},
+			getText: () => "",
+			setText() {},
+		} as {
+			render: (width: number) => string[];
+			invalidate: () => void;
+			handleInput: (data: string) => void;
+			getText: () => string;
+			setText: (text: string) => void;
+			onSubmit?: (text: string) => void;
+			onEscape?: () => void;
+			actionHandlers?: Map<unknown, () => void>;
+		};
+		const editor = new WrappedPolishedEditor(
+			base,
+			makeTheme(),
+			() => defaultConfig,
+			() => ({ modelLabel: "model", providerLabel: "provider" }),
+			() => "off",
+		);
+		const onSubmit = vi.fn();
+		const onEscape = vi.fn();
+		const actionHandlers = new Map<unknown, () => void>();
+
+		editor.onSubmit = onSubmit;
+		editor.onEscape = onEscape;
+		editor.actionHandlers = actionHandlers;
+
+		expect(base.onSubmit).toBe(onSubmit);
+		expect(base.onEscape).toBe(onEscape);
+		expect(base.actionHandlers).toBe(actionHandlers);
 	});
 
 	it("applies custom editor accent and border colors to previous user messages", () => {

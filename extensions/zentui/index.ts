@@ -23,7 +23,7 @@ import { readRuntimeInfo } from "./runtime";
 import { installSelectorBorderStyle } from "./selector-border";
 import { registerZentuiSettingsCommand } from "./settings-command";
 import { type FooterState, createInitialState, syncState } from "./state";
-import { PolishedEditor } from "./ui";
+import { PolishedEditor, WrappedPolishedEditor } from "./ui";
 import { installUserMessageStyle } from "./user-message";
 
 const ZENTUI_EDITOR_FACTORY = Symbol.for("pi-zentui.editor-factory");
@@ -37,6 +37,8 @@ type ZentuiEditorFactory = EditorFactory & {
 type ApplyUiResult = {
 	editorBlocked: boolean;
 };
+
+type EditorInstallMode = "none" | "standalone" | "wrapper";
 
 function isZentuiEditorFactory(factory: EditorFactory | undefined): boolean {
 	return Boolean((factory as ZentuiEditorFactory | undefined)?.[ZENTUI_EDITOR_FACTORY]);
@@ -53,6 +55,8 @@ export default function (pi: ExtensionAPI) {
 	let cleanupPrototypePatches: () => void = () => {};
 	let footerInstalled = false;
 	let editorInstalled = false;
+	let editorInstallMode: EditorInstallMode = "none";
+	let wrappedEditorFactory: EditorFactory | undefined;
 	let prototypePatchesInstalled = false;
 	let projectRefreshInFlight = false;
 	let projectRefreshPending = false;
@@ -139,12 +143,42 @@ export default function (pi: ExtensionAPI) {
 		return factory;
 	};
 
+	const makeWrappedEditorFactory = (
+		ctx: ExtensionContext,
+		baseFactory: EditorFactory,
+	): ZentuiEditorFactory => {
+		const factory = ((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) =>
+			new WrappedPolishedEditor(
+				baseFactory(tui, theme, keybindings),
+				ctx.ui.theme,
+				getCurrentConfig,
+				() => ({
+					modelLabel: state.modelLabel,
+					providerLabel: state.providerLabel,
+				}),
+				getThinkingLevel,
+			)) as ZentuiEditorFactory;
+		factory[ZENTUI_EDITOR_FACTORY] = true;
+		return factory;
+	};
+
 	const installEditor = (ctx: ExtensionContext): boolean => {
 		const currentFactory = ctx.ui.getEditorComponent();
-		if (currentFactory && !isZentuiEditorFactory(currentFactory)) return false;
+		if (currentFactory && isZentuiEditorFactory(currentFactory)) {
+			editorInstalled = true;
+			return true;
+		}
 
 		installPrototypePatches();
-		ctx.ui.setEditorComponent(makeEditorFactory(ctx));
+		if (currentFactory) {
+			wrappedEditorFactory = currentFactory;
+			ctx.ui.setEditorComponent(makeWrappedEditorFactory(ctx, currentFactory));
+			editorInstallMode = "wrapper";
+		} else {
+			wrappedEditorFactory = undefined;
+			ctx.ui.setEditorComponent(makeEditorFactory(ctx));
+			editorInstallMode = "standalone";
+		}
 		editorInstalled = true;
 		return true;
 	};
@@ -154,7 +188,11 @@ export default function (pi: ExtensionAPI) {
 		if (currentFactory && !isZentuiEditorFactory(currentFactory)) return false;
 
 		uninstallPrototypePatches();
-		ctx.ui.setEditorComponent(undefined);
+		ctx.ui.setEditorComponent(
+			editorInstallMode === "wrapper" && wrappedEditorFactory ? wrappedEditorFactory : undefined,
+		);
+		wrappedEditorFactory = undefined;
+		editorInstallMode = "none";
 		editorInstalled = false;
 		return true;
 	};
@@ -192,7 +230,9 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx.hasUI) return result;
 		activeTheme = ctx.ui.theme;
 		if (currentConfig.features.editor) {
-			if (!editorInstalled) result.editorBlocked = !installEditor(ctx);
+			const currentFactory = ctx.ui.getEditorComponent();
+			const editorMissingOrReplaced = !editorInstalled || !isZentuiEditorFactory(currentFactory);
+			if (editorMissingOrReplaced) result.editorBlocked = !installEditor(ctx);
 		} else if (editorInstalled || prototypePatchesInstalled) {
 			result.editorBlocked = !uninstallEditor(ctx);
 		}
@@ -219,6 +259,17 @@ export default function (pi: ExtensionAPI) {
 		refresh();
 	};
 
+	const scheduleEditorReconciliation = (ctx: ExtensionContext) => {
+		setTimeout(() => {
+			if (!ctx.hasUI || !currentConfig.features.editor) return;
+			const currentFactory = ctx.ui.getEditorComponent();
+			if (currentFactory && !isZentuiEditorFactory(currentFactory)) {
+				applyConfiguredUi(ctx);
+				refresh();
+			}
+		}, 0);
+	};
+
 	const cleanupUi = (ctx?: ExtensionContext) => {
 		uninstallPrototypePatches();
 		stopProjectRefresh();
@@ -226,8 +277,17 @@ export default function (pi: ExtensionAPI) {
 		getActiveExtensionStatuses = () => new Map();
 		if (ctx?.hasUI) {
 			ctx.ui.setFooter(undefined);
-			ctx.ui.setEditorComponent(undefined);
+			const currentFactory = ctx.ui.getEditorComponent();
+			if (!currentFactory || isZentuiEditorFactory(currentFactory)) {
+				ctx.ui.setEditorComponent(
+					editorInstallMode === "wrapper" && wrappedEditorFactory
+						? wrappedEditorFactory
+						: undefined,
+				);
+			}
 		}
+		wrappedEditorFactory = undefined;
+		editorInstallMode = "none";
 		footerInstalled = false;
 		editorInstalled = false;
 		activeTheme = undefined;
@@ -242,6 +302,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		installUi(ctx);
+		scheduleEditorReconciliation(ctx);
 	});
 
 	registerZentuiSettingsCommand(pi, {
