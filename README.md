@@ -21,8 +21,10 @@ Zentui brings two popular aesthetics to Pi:
 - `on  branch` — git branch with icon
 - `[!?↑]` — git status indicators (modified, untracked, ahead/behind, stashed, etc.)
 - `via  v5.5.0` — runtime detection with version and Starship-style Nerd Font runtime/language modules
+- Optional segments (off by default): `user@host`, current time, OS icon, and session duration
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/zentui`
+- Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](#footer-format-template)
 - Third-party Pi extension statuses from `ctx.ui.setStatus()` can be shown on the left,
   middle, or right side, or hidden per status key from `/zentui`
 
@@ -141,6 +143,8 @@ Useful slash-command shortcuts:
 /zentui copy-friendly enable
 /zentui copy-friendly disable
 /zentui copy-friendly toggle
+/zentui format "$cwd on branch $git_branch$git_status using $runtime $fill $context"
+/zentui format clear
 ```
 
 Default config values — copy this and change any value you want:
@@ -148,6 +152,7 @@ Default config values — copy this and change any value you want:
 ```json
 {
 	"projectRefreshIntervalMs": 30000,
+	"footerFormat": "",
 	"icons": {
 		"cwd": "󰝰",
 		"git": "",
@@ -164,7 +169,10 @@ Default config values — copy this and change any value you want:
 		"typechanged": "T",
 		"cacheHit": "󰆼",
 		"editorPrompt": "",
-		"rail": "│"
+		"rail": "│",
+		"username": "",
+		"time": "",
+		"os": ""
 	},
 	"colors": {
 		"cwd": "bold cyan",
@@ -178,6 +186,10 @@ Default config values — copy this and change any value you want:
 		"extensionStatus": "bright-black",
 		"separator": "bright-black",
 		"runtimePrefix": "",
+		"sessionDuration": "yellow",
+		"username": "bold yellow",
+		"time": "bold yellow",
+		"os": "bold white",
 		"editorAccent": "accent",
 		"editorPrompt": "accent",
 		"editorBorder": "borderMuted",
@@ -204,10 +216,15 @@ Default config values — copy this and change any value you want:
 		"cwd": true,
 		"gitBranch": true,
 		"gitStatus": true,
+		"gitCounts": false,
 		"runtime": true,
 		"context": true,
 		"tokens": true,
-		"cost": true
+		"cost": true,
+		"sessionDuration": false,
+		"username": false,
+		"time": false,
+		"os": false
 	},
 	"extensionStatuses": {
 		"defaultPlacement": "right",
@@ -222,7 +239,8 @@ Default config values — copy this and change any value you want:
 - `icons`: every shown icon key is configurable; omit any key to use the Zentui default. `rail` sets the vertical glyph drawn as the left rail of the active editor frame and previous user messages when `copyFriendly` is disabled (default `│`; any single Unicode vertical or block glyph). `editorPrompt` controls an optional copy-friendly editor prompt glyph; the default is `""` so copy-friendly mode stays rail-free.
 - `colorSources`: `theme` maps styles through Pi theme tokens; `terminal` emits terminal colors. `/zentui` switches these sources; manual JSON controls specific style values.
 - `features`: `editor` enables Zentui's custom editor, selector borders, and previous-message chrome. `statusLine` enables Zentui's custom footer/status line. `copyFriendly` hides editor and previous-message rail glyphs so native terminal selection copies less chrome. All three can be changed from `/zentui` or direct slash-command arguments.
-- `footerSegments`: show or hide individual built-in footer segments (`cwd`, `gitBranch`, `gitStatus`, `runtime`, `context`, `tokens`, `cost`). Toggle them from the `Built-in segments` tab in `/zentui`.
+- `footerSegments`: show or hide individual built-in footer segments (`cwd`, `gitBranch`, `gitStatus`, `gitCounts`, `runtime`, `sessionDuration`, `username`, `time`, `os`, `context`, `tokens`, `cost`). Toggle them from the `Built-in segments` tab in `/zentui`.
+- `footerFormat`: optional Starship-style template string that fully controls the footer layout. When set, it overrides `footerSegments`. See [Footer Format Template](#footer-format-template) below.
 - `extensionStatuses`: controls third-party statuses published by other Pi extensions through `ctx.ui.setStatus()`. `defaultPlacement` and each `placements` value can be `off`, `left`, `middle`, or `right`. The `Extension segments` tab in `/zentui` lists only statuses that are currently active.
 - The shown `editor*` values match the default `theme` source. Omit those keys to keep Zentui's source-aware defaults when switching between `theme` and `terminal`.
 - `editorAccent` styles the active editor rail and previous user-message rail when `features.copyFriendly` is disabled.
@@ -231,6 +249,57 @@ Default config values — copy this and change any value you want:
 - `editorModel`, `editorProvider`, and `editorThinking*` style the editor metadata. `editorThinking` applies to every non-`off` thinking level unless a level-specific key is set.
 
 Tip: when using copy-friendly mode, setting Pi's `editorPaddingX` to `1` in `~/.pi/agent/settings.json` keeps a small left gutter without copying a rail glyph.
+
+## Footer Format Template
+
+For full control, set a Starship-style `footerFormat` template string. It supports `$variable` and `${variable}` tokens plus a special `$fill` token that splits the line into left and right zones. When set, it overrides the built-in `footerSegments` layout; when empty or omitted, the segment layout above is used.
+
+A second `$fill` creates a **centered middle zone** — content between the two fills is true-centered (`floor((gap - middle) / 2)`), just like third-party statuses placed `middle`.
+
+```json
+{
+	"footerFormat": "$os $username $cwd on branch $git_branch$git_status using $runtime $fill $context | $tokens | $cost $time"
+}
+```
+
+Center the branch between directory and cost:
+
+```json
+{
+	"footerFormat": "$cwd $fill $git_branch $fill $cost"
+}
+```
+
+### Variables
+
+| Token               | Aliases      | Renders                   |
+| ------------------- | ------------ | ------------------------- |
+| `$cwd`              | `$directory` | current directory         |
+| `$git_branch`       | `$branch`    | git branch with icon      |
+| `$git_status`       | `$status`    | `[!?↑]` status block      |
+| `$runtime`          |              | runtime icon + version    |
+| `$session_duration` | `$duration`  | session running time      |
+| `$username`         |              | `user@host`               |
+| `$os`               |              | operating-system icon     |
+| `$time`             |              | current time `HH:MM`      |
+| `$context`          |              | context usage             |
+| `$tokens`           |              | input/output token counts |
+| `$cost`             |              | session cost              |
+| `$fill`             | —            | special: splits zones     |
+
+### `$fill` behavior
+
+| `$fill` count | Layout                                                                   |
+| ------------- | ------------------------------------------------------------------------ |
+| 0             | everything left-aligned                                                  |
+| 1             | tokens before → left, tokens after → right                               |
+| 2             | before first → left, between → **centered middle**, after second → right |
+| 3+            | first two count; extras ignored                                          |
+
+- Literal text (`on branch`, `using`, `\|`, spaces) is rendered verbatim — you control all spacing.
+- Each variable renders its core value only (no `on`/`via` prefixes); add those words as literal text.
+- Unknown `$variables` render empty.
+- Set or clear at runtime: `/zentui format "<template>"` and `/zentui format clear`.
 
 ## Requirements
 
