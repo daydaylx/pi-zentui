@@ -16,6 +16,7 @@ import {
 	saveColorSourcesPatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
+	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
@@ -124,14 +125,18 @@ export default function (pi: ExtensionAPI) {
 		stopSessionTimer();
 		lastDurationLabel = "";
 		const timer = setInterval(() => {
+			const segments = currentConfig.footerSegments;
+			const formatNeedsTimer =
+				currentConfig.footerFormat &&
+				/\$\{?(?:time|session_duration|duration)\b/.test(currentConfig.footerFormat);
 			if (
 				!(
 					currentConfig.features.statusLine &&
-					(currentConfig.footerSegments.sessionDuration || currentConfig.footerSegments.time)
+					(segments.sessionDuration || segments.time || formatNeedsTimer)
 				)
 			)
 				return;
-			if (currentConfig.footerSegments.time) {
+			if (segments.time || formatNeedsTimer) {
 				refresh();
 				return;
 			}
@@ -384,6 +389,9 @@ export default function (pi: ExtensionAPI) {
 		},
 		setFooterSegments(patch: Partial<FooterSegmentsConfig>) {
 			currentConfig = saveFooterSegmentsPatch(patch);
+		},
+		setFooterFormat(value: string) {
+			currentConfig = saveFooterFormatPatch(value);
 		},
 		getActiveExtensionStatuses() {
 			return getActiveExtensionStatuses();

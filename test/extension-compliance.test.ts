@@ -1535,6 +1535,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1573,6 +1574,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1614,6 +1616,7 @@ describe("Pi docs compliance", () => {
 					return { applied: true };
 				},
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1655,6 +1658,7 @@ describe("Pi docs compliance", () => {
 					return { applied: true };
 				},
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1686,6 +1690,7 @@ describe("Pi docs compliance", () => {
 					return { applied: true };
 				},
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1725,6 +1730,7 @@ describe("Pi docs compliance", () => {
 						"another extension is currently managing the editor; reload Pi to apply this change",
 				}),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1771,6 +1777,7 @@ describe("Pi docs compliance", () => {
 						return { applied: true };
 					},
 					setFooterSegments() {},
+					setFooterFormat() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -1829,6 +1836,7 @@ describe("Pi docs compliance", () => {
 					setColorSources() {},
 					setUiFeatures: () => ({ applied: true }),
 					setFooterSegments() {},
+					setFooterFormat() {},
 					getActiveExtensionStatuses: () => new Map<string, string>(),
 					setExtensionStatusPlacement() {},
 					setExtensionStatusColorMode() {},
@@ -1895,6 +1903,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -1947,6 +1956,7 @@ describe("Pi docs compliance", () => {
 				},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2012,6 +2022,7 @@ describe("Pi docs compliance", () => {
 				},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2070,6 +2081,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},
@@ -2121,6 +2133,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () =>
 					new Map<string, string>([
 						["alpha", "A"],
@@ -2177,6 +2190,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>(),
 				setExtensionStatusPlacement(key, placement) {
 					placements.push({ key, placement });
@@ -2233,6 +2247,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["alpha", "ok"]]),
 				setExtensionStatusPlacement(key, placement) {
 					placements.push({ key, placement });
@@ -2297,6 +2312,7 @@ describe("Pi docs compliance", () => {
 				setColorSources() {},
 				setUiFeatures: () => ({ applied: true }),
 				setFooterSegments() {},
+				setFooterFormat() {},
 				getActiveExtensionStatuses: () => new Map<string, string>([["active", "ok"]]),
 				setExtensionStatusPlacement() {},
 				setExtensionStatusColorMode() {},

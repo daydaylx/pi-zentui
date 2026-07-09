@@ -51,6 +51,7 @@ type SettingsCommandDeps = {
 		ctx: ExtensionContext,
 	) => { applied: boolean; reason?: string };
 	setFooterSegments: (patch: Partial<FooterSegmentsConfig>) => void;
+	setFooterFormat: (value: string) => void;
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
@@ -125,6 +126,8 @@ const directCommandSuggestions = [
 	"copy-friendly enable",
 	"copy-friendly disable",
 	"copy-friendly toggle",
+	"format clear",
+	"format $cwd on $git_branch $fill $context",
 ];
 
 const sectionLabels: Record<SettingsSection, string> = {
@@ -207,7 +210,7 @@ function footerSegmentPatch(
 }
 
 function usageText(): string {
-	return "Usage: /zentui [editor|statusline|copy-friendly] [enable|disable|toggle]";
+	return 'Usage: /zentui [editor|statusline|copy-friendly] [enable|disable|toggle] or /zentui format "<template>"';
 }
 
 function featureNotification(
@@ -249,6 +252,18 @@ function parseDirectFeatureCommand(
 		feature,
 		enabled: action === "toggle" ? !config.features[feature] : action === "enable",
 	};
+}
+
+function parseFormatCommand(args: string): { value: string | undefined } | undefined {
+	const trimmed = args.trim();
+	if (!trimmed.toLowerCase().startsWith("format")) return undefined;
+
+	const rest = trimmed.slice("format".length).trim();
+	if (!rest || rest.toLowerCase() === "clear") return { value: undefined };
+
+	const unquoted =
+		rest.startsWith('"') && rest.endsWith('"') && rest.length >= 2 ? rest.slice(1, -1) : rest;
+	return { value: unquoted };
 }
 
 function argumentCompletions(prefix: string): AutocompleteItem[] | null {
@@ -392,6 +407,26 @@ export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCo
 		getArgumentCompletions: argumentCompletions,
 		handler: async (_args, ctx) => {
 			const args = typeof _args === "string" ? _args : "";
+
+			const formatCommand = parseFormatCommand(args);
+			if (formatCommand) {
+				try {
+					deps.setFooterFormat(formatCommand.value ?? "");
+					deps.requestRender();
+					if (ctx.hasUI) {
+						if (formatCommand.value === undefined) {
+							ctx.ui.notify("Footer format cleared (using default layout)", "info");
+						} else {
+							ctx.ui.notify(`Footer format: ${formatCommand.value}`, "info");
+						}
+					}
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					if (ctx.hasUI) ctx.ui.notify(`Could not update footer format: ${message}`, "error");
+				}
+				return;
+			}
+
 			const directCommand = parseDirectFeatureCommand(args, deps.getConfig());
 			if (directCommand) {
 				try {

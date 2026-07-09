@@ -49,6 +49,7 @@ const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
 
 export type PolishedTuiConfig = {
 	projectRefreshIntervalMs: number;
+	footerFormat: string;
 	icons: {
 		cwd: string;
 		git: string;
@@ -104,10 +105,40 @@ export type PolishedTuiConfig = {
 	extensionStatuses: ExtensionStatusesConfig;
 };
 
+/**
+ * Canonical footer format variable names. In a `footerFormat` string these
+ * are written as `$name` or `${name}`.
+ */
+export const FOOTER_FORMAT_VARIABLES = [
+	"cwd",
+	"git_branch",
+	"git_status",
+	"runtime",
+	"session_duration",
+	"username",
+	"os",
+	"time",
+	"context",
+	"tokens",
+	"cost",
+] as const;
+
+/**
+ * Alias → canonical variable name mapping for `footerFormat`.
+ * `$fill` is special (not a variable) and handled by the parser.
+ */
+export const FOOTER_FORMAT_ALIASES: Record<string, string> = {
+	directory: "cwd",
+	branch: "git_branch",
+	status: "git_status",
+	duration: "session_duration",
+};
+
 export const configPath = join(getAgentDir(), "zentui.json");
 
 export const defaultConfig: PolishedTuiConfig = {
 	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
+	footerFormat: "",
 	icons: {
 		cwd: "󰝰",
 		git: "",
@@ -460,6 +491,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		: defaultConfig.extensionStatuses;
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
+		footerFormat: stringValue(config, "footerFormat") ?? "",
 		icons: {
 			...defaultConfig.icons,
 			...icons,
@@ -547,6 +579,13 @@ export function saveFooterSegmentsPatch(
 		...existing,
 		...validFooterSegmentEntries(patch),
 	};
+	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+	return mergeConfig(record);
+}
+
+export function saveFooterFormatPatch(value: string, path = configPath): PolishedTuiConfig {
+	const record = readConfigRecord(path);
+	record.footerFormat = typeof value === "string" ? value : "";
 	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
 	return mergeConfig(record);
 }

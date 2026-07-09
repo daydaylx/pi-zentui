@@ -8,6 +8,7 @@ import {
 	saveColorSourcesPatch,
 	saveExtensionStatusColorMode,
 	saveExtensionStatusPlacement,
+	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
 	saveUiFeaturesPatch,
 } from "../extensions/zentui/config";
@@ -61,6 +62,23 @@ describe("mergeConfig", () => {
 			placements: {},
 			colorModes: {},
 		});
+	});
+
+	it("defaults footerFormat to empty string", () => {
+		expect(mergeConfig({}).footerFormat).toBe("");
+		expect(defaultConfig.footerFormat).toBe("");
+	});
+
+	it("accepts a custom footerFormat string", () => {
+		expect(mergeConfig({ footerFormat: "$cwd on $git_branch $fill $cost" }).footerFormat).toBe(
+			"$cwd on $git_branch $fill $cost",
+		);
+	});
+
+	it("ignores non-string footerFormat values", () => {
+		expect(mergeConfig({ footerFormat: 123 }).footerFormat).toBe("");
+		expect(mergeConfig({ footerFormat: null }).footerFormat).toBe("");
+		expect(mergeConfig({ footerFormat: true }).footerFormat).toBe("");
 	});
 
 	it("accepts custom project refresh intervals and 0 to disable polling", () => {
@@ -511,6 +529,31 @@ describe("mergeConfig", () => {
 				cost: true,
 			});
 			expect(raw).toEqual({ footerSegments: { runtime: false } });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("writes and reads back footerFormat", () => {
+		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const path = join(dir, "zentui.json");
+		try {
+			const config = saveFooterFormatPatch("$cwd on $git_branch $fill $cost", path);
+			const raw = JSON.parse(readFileSync(path, "utf8"));
+
+			expect(config.footerFormat).toBe("$cwd on $git_branch $fill $cost");
+			expect(raw).toEqual({ footerFormat: "$cwd on $git_branch $fill $cost" });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("clears footerFormat when saving empty string", () => {
+		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const path = join(dir, "zentui.json");
+		try {
+			const config = saveFooterFormatPatch("", path);
+			expect(config.footerFormat).toBe("");
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

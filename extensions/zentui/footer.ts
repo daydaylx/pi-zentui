@@ -1,7 +1,9 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { PolishedTuiConfig } from "./config";
+import { FOOTER_FORMAT_ALIASES } from "./config";
 import { collectExtensionStatusSegments, type ExtensionStatusSegment } from "./extension-status";
+import { parseFooterFormat, renderFormatSplit } from "./footer-format";
 import {
 	buildSessionDurationLabel,
 	formatCwdLabel,
@@ -214,6 +216,67 @@ export function installFooter(
 				})();
 				const statusBlock =
 					allStatus || aheadBehind ? gitStatusColor(`[${allStatus}${aheadBehind}]`) : "";
+				const renderVariable = (name: string): string => {
+					const canonical = FOOTER_FORMAT_ALIASES[name] ?? name;
+					switch (canonical) {
+						case "cwd":
+							return cwdLabel;
+						case "git_branch":
+							return branch ? (gitIcon ? `${gitIcon} ${gitColor(branch)}` : gitColor(branch)) : "";
+						case "git_status":
+							return statusBlock;
+						case "runtime": {
+							if (!state.runtime) return "";
+							const label = state.runtime.version
+								? `${state.runtime.symbol} ${state.runtime.version}`
+								: state.runtime.symbol;
+							return renderStyleForSource(theme, colorSource, state.runtime.style, label);
+						}
+						case "session_duration":
+							return state.sessionStartEpoch
+								? renderStyleForSource(
+										theme,
+										colorSource,
+										config.colors.sessionDuration,
+										buildSessionDurationLabel(state.sessionStartEpoch),
+									)
+								: "";
+						case "username":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.username,
+								formatUsernameHostLabel(config.icons.username),
+							);
+						case "os":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.os,
+								formatOsLabel(config.icons.os),
+							);
+						case "time":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.time,
+								formatTimeLabel(config.icons.time),
+							);
+						case "context":
+							return renderStyleForSource(theme, colorSource, contextColor, state.contextLabel);
+						case "tokens":
+							return renderStyleForSource(
+								theme,
+								colorSource,
+								config.colors.tokens,
+								state.tokenLabel,
+							);
+						case "cost":
+							return renderStyleForSource(theme, colorSource, config.colors.cost, state.costLabel);
+						default:
+							return "";
+					}
+				};
 				const branchParts =
 					config.footerSegments.gitBranch && branch
 						? ["on", gitIcon, gitColor(branch)].filter(Boolean)
@@ -286,6 +349,17 @@ export function installFooter(
 					.filter(Boolean)
 					.join(separator);
 
+				let contentLeft = left;
+				let contentRight = right;
+				if (config.footerFormat) {
+					const { left: fmtLeft, right: fmtRight } = renderFormatSplit(
+						parseFooterFormat(config.footerFormat),
+						renderVariable,
+					);
+					contentLeft = fmtLeft;
+					contentRight = fmtRight;
+				}
+
 				const extensionStatuses = collectExtensionStatusSegments(
 					footerData.getExtensionStatuses(),
 					config,
@@ -295,8 +369,8 @@ export function installFooter(
 						? segment.text
 						: renderStyleForSource(theme, colorSource, config.colors.extensionStatus, segment.text);
 				const content = composeFooterContent(
-					left,
-					right,
+					contentLeft,
+					contentRight,
 					extensionStatuses.left.map(renderExtensionStatus),
 					extensionStatuses.middle.map(renderExtensionStatus),
 					extensionStatuses.right.map(renderExtensionStatus),
