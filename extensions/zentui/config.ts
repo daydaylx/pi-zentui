@@ -23,6 +23,14 @@ export type ContextThresholds = {
 	error: number;
 };
 
+export type PathDisplayMode = "basename" | "full";
+
+export type PathDisplayConfig = {
+	mode: PathDisplayMode;
+	/** Trailing directories to show in full mode. 0 = unlimited; clamped to 0..5. */
+	depth: number;
+};
+
 export type ColorSourcesConfig = {
 	starship: ColorSource;
 	editor: ColorSource;
@@ -69,6 +77,7 @@ export type PolishedTuiConfig = {
 	footerFormat: string;
 	contextStyle: ContextStyle;
 	contextThresholds: ContextThresholds;
+	pathDisplay: PathDisplayConfig;
 	icons: ResolvedIcons;
 	colors: {
 		cwd: ColorSpec;
@@ -144,6 +153,7 @@ export const defaultConfig: PolishedTuiConfig = {
 	footerFormat: "",
 	contextStyle: "text",
 	contextThresholds: { warning: 70, error: 90 },
+	pathDisplay: { mode: "basename", depth: 0 },
 	icons: {
 		mode: "auto",
 		...NERD_DEFAULT_ICONS,
@@ -242,6 +252,18 @@ function parseContextThresholds(value: unknown): ContextThresholds {
 		error = swapped;
 	}
 	return { warning, error };
+}
+
+function parsePathDisplay(value: unknown): PathDisplayConfig {
+	const defaults = defaultConfig.pathDisplay;
+	if (!isRecord(value)) return { ...defaults };
+	const mode = value.mode === "full" || value.mode === "basename" ? value.mode : defaults.mode;
+	const rawDepth = value.depth;
+	const depth =
+		typeof rawDepth === "number" && Number.isFinite(rawDepth) && rawDepth >= 0
+			? Math.min(5, Math.floor(rawDepth))
+			: defaults.depth;
+	return { mode, depth };
 }
 
 function stringValue(record: Record<string, unknown>, key: string): string | undefined {
@@ -488,6 +510,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		footerFormat: stringValue(config, "footerFormat") ?? "",
 		contextStyle: parseContextStyle(config.contextStyle),
 		contextThresholds: parseContextThresholds(config.contextThresholds),
+		pathDisplay: parsePathDisplay(config.pathDisplay),
 		icons: resolveConfiguredIcons(iconMode, iconOverrides),
 		colors: {
 			...defaultConfig.colors,
@@ -612,6 +635,21 @@ export function saveContextThresholdsPatch(
 		...existing,
 		...thresholds,
 	};
+	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+	return mergeConfig(record);
+}
+
+export function savePathDisplayPatch(
+	patch: Partial<PathDisplayConfig>,
+	path = configPath,
+): PolishedTuiConfig {
+	const record = readConfigRecord(path);
+	const existing = isRecord(record.pathDisplay)
+		? { ...(record.pathDisplay as Record<string, unknown>) }
+		: {};
+	if (patch.mode !== undefined) existing.mode = patch.mode;
+	if (patch.depth !== undefined) existing.depth = patch.depth;
+	record.pathDisplay = existing;
 	writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, "utf8");
 	return mergeConfig(record);
 }

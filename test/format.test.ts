@@ -9,6 +9,7 @@ import {
 	buildTokenLabel,
 	contextColorTier,
 	formatCount,
+	formatCwdLabel,
 	formatOsLabel,
 	getUsageTotals,
 	invalidateUsageTotalsCache,
@@ -177,6 +178,100 @@ describe("formatOsLabel", () => {
 		expect(formatOsLabel(ASCII_DEFAULT_ICONS.os, "ascii", "darwin")).toBe(
 			OS_PLATFORM_ICONS_ASCII.darwin,
 		);
+	});
+});
+
+describe("formatCwdLabel", () => {
+	const home = "/Users/me";
+
+	it("defaults to basename and preserves current behavior", () => {
+		expect(formatCwdLabel("/Users/me/Projects/zentui", "")).toBe("zentui");
+		expect(formatCwdLabel("/Users/me/Projects/zentui/", "")).toBe("zentui");
+		expect(formatCwdLabel("/", "")).toBe("/");
+		expect(formatCwdLabel("C:\\Users\\me\\zentui", "")).toBe("zentui");
+		expect(formatCwdLabel("/tmp/project", "󰝰")).toBe("󰝰 project");
+	});
+
+	it("renders full paths with home contracted to ~", () => {
+		expect(formatCwdLabel("/Users/me/Projects/zentui", "", { mode: "full", home })).toBe(
+			"~/Projects/zentui",
+		);
+		expect(formatCwdLabel("/Users/me", "", { mode: "full", home })).toBe("~");
+		expect(formatCwdLabel("/tmp/project", "", { mode: "full", home })).toBe("/tmp/project");
+		expect(formatCwdLabel("/", "", { mode: "full", home })).toBe("/");
+		expect(
+			formatCwdLabel("C:\\Users\\me\\Projects\\zentui", "", {
+				mode: "full",
+				home: "C:\\Users\\me",
+			}),
+		).toBe("~/Projects/zentui");
+		// Prefix-safe: /Users/me2 must not match home /Users/me
+		expect(formatCwdLabel("/Users/me2/Projects", "", { mode: "full", home })).toBe(
+			"/Users/me2/Projects",
+		);
+	});
+
+	it("truncates full paths to trailing directory depth (Starship-style)", () => {
+		expect(
+			formatCwdLabel("/Users/me/Projects/foo/bar", "", {
+				mode: "full",
+				home,
+				depth: 2,
+			}),
+		).toBe("…/foo/bar");
+		expect(
+			formatCwdLabel("/var/log/nginx/access", "", {
+				mode: "full",
+				home,
+				depth: 2,
+			}),
+		).toBe("…/nginx/access");
+		expect(
+			formatCwdLabel("C:\\a\\b\\c\\d", "", {
+				mode: "full",
+				home,
+				depth: 2,
+			}),
+		).toBe("…/c/d");
+		expect(
+			formatCwdLabel("/Users/me/Projects/zentui", "", {
+				mode: "full",
+				home,
+				depth: 5,
+			}),
+		).toBe("~/Projects/zentui");
+		expect(
+			formatCwdLabel("/Users/me/Projects/zentui", "", {
+				mode: "full",
+				home,
+				depth: 1,
+			}),
+		).toBe("…/zentui");
+		expect(formatCwdLabel("/Users/me", "", { mode: "full", home, depth: 2 })).toBe("~");
+		expect(formatCwdLabel("/", "", { mode: "full", home, depth: 2 })).toBe("/");
+		expect(formatCwdLabel("//", "", { mode: "full", home, depth: 2 })).toBe("/");
+		expect(formatCwdLabel("//", "")).toBe("/");
+		expect(
+			formatCwdLabel("/Users/me/Projects/zentui", "", {
+				mode: "full",
+				home,
+				depth: 0,
+			}),
+		).toBe("~/Projects/zentui");
+		// depth is ignored for basename
+		expect(
+			formatCwdLabel("/Users/me/Projects/zentui", "", {
+				mode: "basename",
+				depth: 2,
+			}),
+		).toBe("zentui");
+		expect(
+			formatCwdLabel("/Users/me/Projects/zentui", "󰝰", {
+				mode: "full",
+				home,
+				depth: 1,
+			}),
+		).toBe("󰝰 …/zentui");
 	});
 });
 

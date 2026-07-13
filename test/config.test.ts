@@ -10,6 +10,7 @@ import {
 	saveExtensionStatusPlacement,
 	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
+	savePathDisplayPatch,
 	saveUiFeaturesPatch,
 } from "../extensions/zentui/config";
 import {
@@ -113,6 +114,72 @@ describe("mergeConfig", () => {
 		expect(
 			mergeConfig({ contextThresholds: { warning: 90, error: 70 } }).contextThresholds,
 		).toEqual({ warning: 70, error: 90 });
+	});
+
+	it("defaults pathDisplay and accepts mode/depth overrides", () => {
+		expect(mergeConfig({}).pathDisplay).toEqual({ mode: "basename", depth: 0 });
+		expect(mergeConfig({ pathDisplay: { mode: "full" } }).pathDisplay).toEqual({
+			mode: "full",
+			depth: 0,
+		});
+		expect(mergeConfig({ pathDisplay: { mode: "full", depth: 3 } }).pathDisplay).toEqual({
+			mode: "full",
+			depth: 3,
+		});
+		expect(mergeConfig({ pathDisplay: { mode: "fish", depth: -3 } }).pathDisplay).toEqual({
+			mode: "basename",
+			depth: 0,
+		});
+		expect(mergeConfig({ pathDisplay: { depth: 12.8 } }).pathDisplay).toEqual({
+			mode: "basename",
+			depth: 5,
+		});
+		expect(mergeConfig({ pathDisplay: "full" }).pathDisplay).toEqual({
+			mode: "basename",
+			depth: 0,
+		});
+		expect(
+			mergeConfig({ pathDisplay: { mode: "full", depth: Number.POSITIVE_INFINITY } }).pathDisplay,
+		).toEqual({ mode: "full", depth: 0 });
+	});
+
+	it("saves pathDisplay patches and keeps unknown keys", () => {
+		const dir = mkdtempSync(join(tmpdir(), "zentui-config-"));
+		const path = join(dir, "zentui.json");
+		try {
+			writeFileSync(
+				path,
+				`${JSON.stringify(
+					{
+						unknown: true,
+						pathDisplay: {
+							mode: "basename",
+							depth: 3,
+							futureKey: "future",
+						},
+					},
+					null,
+					2,
+				)}
+`,
+			);
+
+			const config = savePathDisplayPatch({ mode: "full" }, path);
+			const raw = JSON.parse(readFileSync(path, "utf8"));
+
+			expect(config.pathDisplay).toEqual({ mode: "full", depth: 3 });
+			expect(raw.unknown).toBe(true);
+			expect(raw.pathDisplay).toEqual({
+				mode: "full",
+				depth: 3,
+				futureKey: "future",
+			});
+
+			const depthConfig = savePathDisplayPatch({ depth: 1 }, path);
+			expect(depthConfig.pathDisplay).toEqual({ mode: "full", depth: 1 });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("defaults icon mode to auto and accepts nerd/ascii", () => {

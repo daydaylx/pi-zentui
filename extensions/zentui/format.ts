@@ -1,7 +1,13 @@
-import { hostname, userInfo } from "node:os";
+import { homedir, hostname, userInfo } from "node:os";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import type { ColorSource, ColorSpec, ContextStyle, ContextThresholds } from "./config";
+import type {
+	ColorSource,
+	ColorSpec,
+	ContextStyle,
+	ContextThresholds,
+	PathDisplayMode,
+} from "./config";
 import type { IconMode } from "./icons";
 import { resolveOsIcon, resolveRuntimeSymbol } from "./icons";
 import type { RuntimeInfo } from "./runtime";
@@ -238,11 +244,72 @@ export function formatRuntimeSegment(
 	return `${renderStyleForSource(theme, colorSource, prefixStyle, "via")} ${renderStyleForSource(theme, colorSource, runtime.style, label)}`;
 }
 
-export function formatCwdLabel(cwd: string, cwdIcon: string): string {
-	const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
-	const parts = normalized.split("/").filter(Boolean);
-	const last = parts[parts.length - 1] ?? cwd;
-	return cwdIcon ? `${cwdIcon} ${last}` : last;
+export type FormatCwdOptions = {
+	mode?: PathDisplayMode;
+	/** Trailing directory components to keep in full mode. 0 = unlimited. */
+	depth?: number;
+	home?: string;
+};
+
+function normalizeDisplayPath(cwd: string): string {
+	const withSlashes = cwd.replace(/\\/g, "/");
+	if (withSlashes === "/" || /^\/+$/.test(withSlashes)) return "/";
+	const stripped = withSlashes.replace(/\/+$/, "");
+	return stripped === "" ? withSlashes : stripped;
+}
+
+function toHomePath(path: string, home: string): string {
+	if (!home) return path;
+	const homeNorm = home.replace(/\\/g, "/").replace(/\/+$/, "");
+	if (!homeNorm) return path;
+	if (path === homeNorm) return "~";
+	if (path.startsWith(`${homeNorm}/`)) return `~${path.slice(homeNorm.length)}`;
+	return path;
+}
+
+/** Starship-style: keep last `depth` components; prefix with `…/` when parents were dropped. */
+function applyPathDepth(path: string, depth: number): string {
+	if (!Number.isFinite(depth) || depth <= 0) return path;
+	const limit = Math.floor(depth);
+	if (path === "~" || path === "/") return path;
+
+	let components: string[];
+	if (path.startsWith("~/")) {
+		components = path.slice(2).split("/").filter(Boolean);
+	} else if (/^[A-Za-z]:\//.test(path)) {
+		components = path.slice(3).split("/").filter(Boolean);
+	} else if (path.startsWith("/")) {
+		components = path.slice(1).split("/").filter(Boolean);
+	} else {
+		components = path.split("/").filter(Boolean);
+	}
+
+	if (components.length <= limit) return path;
+	return `…/${components.slice(-limit).join("/")}`;
+}
+
+export function formatCwdLabel(cwd: string, cwdIcon: string, options?: FormatCwdOptions): string {
+	const mode = options?.mode ?? "basename";
+	const normalized = normalizeDisplayPath(cwd);
+	let pathText: string;
+	if (mode === "full") {
+		const home =
+			options?.home ??
+			(() => {
+				try {
+					return homedir();
+				} catch {
+					return "";
+				}
+			})();
+		pathText = applyPathDepth(toHomePath(normalized, home), options?.depth ?? 0);
+	} else if (normalized === "/") {
+		pathText = "/";
+	} else {
+		const parts = normalized.split("/").filter(Boolean);
+		pathText = parts[parts.length - 1] ?? cwd;
+	}
+	return cwdIcon ? `${cwdIcon} ${pathText}` : pathText;
 }
 
 export function formatUsernameHostLabel(icon: string): string {

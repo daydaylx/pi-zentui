@@ -14,6 +14,7 @@ import {
 	type FooterSegmentsConfig,
 	type IconMode,
 	loadConfig,
+	type PathDisplayConfig,
 	type PolishedTuiConfig,
 	saveColorSourcesPatch,
 	saveContextStylePatch,
@@ -22,6 +23,7 @@ import {
 	saveFooterFormatPatch,
 	saveFooterSegmentsPatch,
 	saveIconsModePatch,
+	savePathDisplayPatch,
 	saveUiFeaturesPatch,
 	type UiFeaturesConfig,
 } from "./config";
@@ -407,6 +409,9 @@ export default function (pi: ExtensionAPI) {
 		},
 		setContextStyle(style: ContextStyle) {
 			currentConfig = saveContextStylePatch(style);
+		},
+		setPathDisplay(patch: Partial<PathDisplayConfig>) {
+			currentConfig = savePathDisplayPatch(patch);
 		},
 		getActiveExtensionStatuses() {
 			return getActiveExtensionStatuses();

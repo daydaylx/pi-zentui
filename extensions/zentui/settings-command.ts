@@ -21,6 +21,8 @@ import {
 	type IconMode,
 	isExtensionStatusColorMode,
 	isExtensionStatusPlacement,
+	type PathDisplayConfig,
+	type PathDisplayMode,
 	type PolishedTuiConfig,
 	type UiFeaturesConfig,
 } from "./config";
@@ -37,6 +39,8 @@ const extensionStatusPlacementValues: ExtensionStatusPlacement[] = [
 ];
 const extensionStatusColorModeValues: ExtensionStatusColorMode[] = ["zentui", "original"];
 const contextStyleValues: ContextStyle[] = ["text", "gauge", "text+gauge"];
+const pathDisplayModeValues: PathDisplayMode[] = ["basename", "full"];
+const pathDepthValues = ["0", "1", "2", "3", "4", "5"] as const;
 const iconModeValues: IconMode[] = ["auto", "nerd", "ascii"];
 type FeatureState = "enabled" | "disabled";
 
@@ -53,7 +57,7 @@ type ColorSettingId = "starship" | "editorMessages";
 type FeatureSettingId = keyof UiFeaturesConfig;
 type FooterSegmentSettingId = keyof FooterSegmentsConfig;
 type SettingsSection = (typeof settingsSections)[number];
-type LayoutSettingId = "contextStyle" | "iconMode";
+type LayoutSettingId = "contextStyle" | "pathDisplay" | "pathDepth" | "iconMode";
 
 type SettingsCommandDeps = {
 	getConfig: () => PolishedTuiConfig;
@@ -66,6 +70,7 @@ type SettingsCommandDeps = {
 	setFooterFormat: (value: string) => void;
 	setIconMode: (mode: IconMode) => void;
 	setContextStyle: (style: ContextStyle) => void;
+	setPathDisplay: (patch: Partial<PathDisplayConfig>) => void;
 	getActiveExtensionStatuses: () => ReadonlyMap<string, string>;
 	setExtensionStatusPlacement: (key: string, placement: ExtensionStatusPlacement) => void;
 	setExtensionStatusColorMode: (key: string, colorMode: ExtensionStatusColorMode) => void;
@@ -194,8 +199,21 @@ function isContextStyle(value: string): value is ContextStyle {
 	return value === "text" || value === "gauge" || value === "text+gauge";
 }
 
+function isPathDisplayMode(value: string): value is PathDisplayMode {
+	return value === "basename" || value === "full";
+}
+
+function isPathDepthValue(value: string): boolean {
+	return (pathDepthValues as readonly string[]).includes(value);
+}
+
 function isLayoutSettingId(value: string): value is LayoutSettingId {
-	return value === "contextStyle" || value === "iconMode";
+	return (
+		value === "contextStyle" ||
+		value === "pathDisplay" ||
+		value === "pathDepth" ||
+		value === "iconMode"
+	);
 }
 
 function editorMessageValue(config: PolishedTuiConfig): ColorSource | "mixed" {
@@ -348,6 +366,21 @@ function buildItems(
 				description: "Render context as text, a gauge bar, or both.",
 				currentValue: config.contextStyle,
 				values: contextStyleValues,
+			},
+			{
+				id: "pathDisplay",
+				label: "Path display",
+				description: "Show cwd as basename or full path (home contracted to ~).",
+				currentValue: config.pathDisplay.mode,
+				values: pathDisplayModeValues,
+			},
+			{
+				id: "pathDepth",
+				label: "Path depth",
+				description:
+					"In full mode, trailing directories to show (0 = all, max 5). Ignored for basename.",
+				currentValue: String(config.pathDisplay.depth),
+				values: [...pathDepthValues],
 			},
 			{
 				id: "iconMode",
@@ -557,6 +590,24 @@ export function registerZentuiSettingsCommand(pi: ExtensionAPI, deps: SettingsCo
 										settingsList.updateValue(id, newValue);
 										deps.requestRender();
 										ctx.ui.notify(`Context style: ${newValue}`, "info");
+										tui.requestRender();
+										return;
+									}
+
+									if (id === "pathDisplay" && isPathDisplayMode(newValue)) {
+										deps.setPathDisplay({ mode: newValue });
+										settingsList.updateValue(id, newValue);
+										deps.requestRender();
+										ctx.ui.notify(`Path display: ${newValue}`, "info");
+										tui.requestRender();
+										return;
+									}
+
+									if (id === "pathDepth" && isPathDepthValue(newValue)) {
+										deps.setPathDisplay({ depth: Number(newValue) });
+										settingsList.updateValue(id, newValue);
+										deps.requestRender();
+										ctx.ui.notify(`Path depth: ${newValue}`, "info");
 										tui.requestRender();
 										return;
 									}

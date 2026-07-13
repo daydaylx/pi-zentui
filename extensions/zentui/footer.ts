@@ -172,7 +172,10 @@ export function installFooter(
 					theme,
 					colorSource,
 					config.colors.cwd,
-					formatCwdLabel(ctx.cwd, config.icons.cwd),
+					formatCwdLabel(ctx.cwd, config.icons.cwd, {
+						mode: config.pathDisplay.mode,
+						depth: config.pathDisplay.depth,
+					}),
 				);
 				const branch = state.branch;
 				const contextUsage = ctx.getContextUsage();
