@@ -25,6 +25,7 @@ Zentui brings two popular aesthetics to Pi:
 - Right side shows context usage, token counts, and cost
 - Built-in footer segments can be shown or hidden individually from `/zentui`
 - Fully custom Starship-style layout via a `footerFormat` template string — see [Footer Format Template](#footer-format-template)
+- Optional agent footer layout with a responsive `directory · workflow · model · thinking` sequence
 - Third-party Pi extension statuses from `ctx.ui.setStatus()` can be shown on the left,
   middle, or right side, or hidden per status key from `/zentui`
 
@@ -35,6 +36,7 @@ Zentui brings two popular aesthetics to Pi:
 - Configurable model, provider, and thinking-level indicator colors
 - Prompt-box-style user messages matching the ZentUI input chrome
 - Copy-friendly mode hides editor and previous-message rail glyphs so terminal selection copies less chrome
+- Agent layout moves model and thinking metadata out of the editor and into the footer, and owns a compact `PI AGENT · project` header
 
 ### Git Status Icons
 
@@ -152,6 +154,7 @@ Default config values — copy this and change any value you want:
 ```json
 {
 	"projectRefreshIntervalMs": 30000,
+	"footerLayout": "standard",
 	"footerFormat": "",
 	"contextStyle": "text",
 	"contextThresholds": {
@@ -246,6 +249,7 @@ Default config values — copy this and change any value you want:
 
 - Style values can be Starship/terminal strings (`bold purple`, `fg:202`, `#89b` / `#89b4fa`, `bg:blue fg:bright-green`) or Pi theme tokens (`accent`, `borderMuted`, `thinkingHigh`). Short `#rgb` hex values expand to `#rrggbb`.
 - `projectRefreshIntervalMs`: project status polling interval; `0` disables polling. Values `1..4999` clamp up to `5000` (minimum 5s); invalid/non-finite values fall back to `30000`.
+- `footerLayout`: `standard` (default) keeps the Starship footer. `agent` renders only `directory · workflow · model · thinking`, appending a published permission-risk warning when present. It ignores Git, runtime, context, token, cost, and unrelated extension-status segments; it also avoids project polling and removes duplicate model/thinking metadata from the editor.
 - `contextStyle`: `text` (default), `gauge`, or `text+gauge` for the context segment.
 - `contextThresholds`: `{ warning, error }` percentages (default `70` / `90`) that select contextNormal / contextWarning / contextError colors.
 - `pathDisplay`: controls how the cwd/`$cwd` path is shown. `mode` is `basename` (default, last segment only) or `full` (path with home contracted to `~`). In `full` mode, `depth` keeps only the last N trailing directories (`0` = entire path after `~`, max `5`); when parents are dropped the path is prefixed with `…/` (Starship-style). The `/zentui` **Layout** tab cycles path mode and path depth (`0`–`5`; depth is ignored for basename). Example: `~/Projects/foo/bar` with `depth: 2` → `…/foo/bar`.

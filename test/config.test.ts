@@ -70,6 +70,12 @@ describe("mergeConfig", () => {
 		expect(defaultConfig.footerFormat).toBe("");
 	});
 
+	it("keeps the standard footer by default and enables the agent layout explicitly", () => {
+		expect(mergeConfig({}).footerLayout).toBe("standard");
+		expect(mergeConfig({ footerLayout: "agent" }).footerLayout).toBe("agent");
+		expect(mergeConfig({ footerLayout: "anything" }).footerLayout).toBe("standard");
+	});
+
 	it("accepts a custom footerFormat string", () => {
 		expect(mergeConfig({ footerFormat: "$cwd on $git_branch $fill $cost" }).footerFormat).toBe(
 			"$cwd on $git_branch $fill $cost",

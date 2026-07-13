@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { renderAgentFooter } from "./agent-footer";
 import type { PolishedTuiConfig } from "./config";
 import { FOOTER_FORMAT_ALIASES } from "./config";
 import { collectExtensionStatusSegments, type ExtensionStatusSegment } from "./extension-status";
@@ -145,6 +146,7 @@ export function installFooter(
 		scheduleProjectRefresh: (ctx: ExtensionContext) => void;
 		setExtensionStatusesGetter?: (fn: (() => ReadonlyMap<string, string>) | undefined) => void;
 	},
+	getThinkingLevel: () => string | undefined = () => undefined,
 ): void {
 	ctx.ui.setFooter((tui, theme, footerData) => {
 		hooks.setRequestRender(() => tui.requestRender());
@@ -164,6 +166,20 @@ export function installFooter(
 			render(width: number): string[] {
 				if (width <= 0) return [""];
 				const config = getConfig();
+				if (config.footerLayout === "agent") {
+					const innerWidth = Math.max(1, width - 2);
+					const content = renderAgentFooter({
+						cwd: ctx.cwd,
+						state,
+						config,
+						statuses: footerData.getExtensionStatuses(),
+						thinkingLevel: getThinkingLevel(),
+						theme,
+						width: innerWidth,
+					});
+					const framed = width > 2 ? ` ${truncateToWidth(content, width - 2, "")} ` : content;
+					return [truncateToWidth(framed, width, "")];
+				}
 				const colorSource = config.colorSources.starship;
 				const iconMode = config.icons.mode;
 				const separator = renderStyleForSource(theme, colorSource, config.colors.separator, " | ");

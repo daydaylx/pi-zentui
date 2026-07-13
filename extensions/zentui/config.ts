@@ -17,6 +17,7 @@ export type ColorSource = "theme" | "terminal";
 export type { IconMode } from "./icons";
 
 export type ContextStyle = "text" | "gauge" | "text+gauge";
+export type FooterLayout = "standard" | "agent";
 
 export type ContextThresholds = {
 	warning: number;
@@ -74,6 +75,7 @@ const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
 
 export type PolishedTuiConfig = {
 	projectRefreshIntervalMs: number;
+	footerLayout: FooterLayout;
 	footerFormat: string;
 	contextStyle: ContextStyle;
 	contextThresholds: ContextThresholds;
@@ -150,6 +152,7 @@ export const configPath = join(getAgentDir(), "zentui.json");
 
 export const defaultConfig: PolishedTuiConfig = {
 	projectRefreshIntervalMs: DEFAULT_PROJECT_REFRESH_INTERVAL_MS,
+	footerLayout: "standard",
 	footerFormat: "",
 	contextStyle: "text",
 	contextThresholds: { warning: 70, error: 90 },
@@ -230,6 +233,10 @@ function clampPercent(value: number): number {
 function parseContextStyle(value: unknown): ContextStyle {
 	if (value === "text" || value === "gauge" || value === "text+gauge") return value;
 	return defaultConfig.contextStyle;
+}
+
+function parseFooterLayout(value: unknown): FooterLayout {
+	return value === "agent" ? "agent" : "standard";
 }
 
 function parseContextThresholds(value: unknown): ContextThresholds {
@@ -507,6 +514,7 @@ export function mergeConfig(parsed: unknown): PolishedTuiConfig {
 		: defaultConfig.extensionStatuses;
 	return {
 		projectRefreshIntervalMs: parseProjectRefreshIntervalMs(config.projectRefreshIntervalMs),
+		footerLayout: parseFooterLayout(config.footerLayout),
 		footerFormat: stringValue(config, "footerFormat") ?? "",
 		contextStyle: parseContextStyle(config.contextStyle),
 		contextThresholds: parseContextThresholds(config.contextThresholds),

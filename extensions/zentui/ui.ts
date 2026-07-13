@@ -282,6 +282,7 @@ function renderPolishedFrame({
 		removeRenderedModelMetaLines(editorFrame.slice(1, -1), modelMeta, previousModelMeta),
 		stalePolishedFrame,
 	);
+	const showMetadata = config.footerLayout !== "agent";
 	const model = renderStyleForSourceOrFallback(
 		uiTheme,
 		colorSource,
@@ -329,7 +330,7 @@ function renderPolishedFrame({
 		EDITOR_BORDER_FALLBACK,
 		"─".repeat(width),
 	);
-	const lines = ["", ...editorLines, "", railedMeta];
+	const lines = showMetadata ? ["", ...editorLines, "", railedMeta] : ["", ...editorLines, ""];
 	const renderedLines = config.features.copyFriendly
 		? [
 				top,
@@ -338,8 +339,12 @@ function renderPolishedFrame({
 					(line, index) =>
 						`${index === 0 ? prompt : copyFriendlyContinuation}${fillLine(line, innerWidth)}`,
 				),
-				"",
-				` ${truncateToWidth(copyFriendlyMeta, Math.max(0, width - 1), "")}`,
+				...(showMetadata
+					? [
+						"",
+						` ${truncateToWidth(copyFriendlyMeta, Math.max(0, width - 1), "")}`,
+					]
+					: []),
 				bottom,
 				...autocompleteLines,
 			]

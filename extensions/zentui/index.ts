@@ -28,6 +28,7 @@ import {
 	type UiFeaturesConfig,
 } from "./config";
 import { installFooter } from "./footer";
+import { installHeader, type HeaderController } from "./header";
 import { buildSessionDurationLabel, invalidateUsageTotalsCache } from "./format";
 import { emptyGitStatus, readGitStatus } from "./git";
 import {
@@ -87,6 +88,7 @@ export default function (pi: ExtensionAPI) {
 	let stopRefreshInterval: StopProjectRefreshInterval = () => {};
 	let cleanupPrototypePatches: () => void = () => {};
 	let footerInstalled = false;
+	let headerController: HeaderController | undefined;
 	let editorInstalled = false;
 	let editorInstallMode: EditorInstallMode = "none";
 	let installedEditorFactory: EditorFactory | undefined;
@@ -104,6 +106,7 @@ export default function (pi: ExtensionAPI) {
 		syncState(state, ctx, currentConfig.icons.cacheHit);
 
 	const refreshProjectState = async (ctx: ExtensionContext) => {
+		if (currentConfig.footerLayout === "agent") return;
 		const [git, runtime] = await Promise.all([readGitStatus(ctx.cwd), readRuntimeInfo(ctx.cwd)]);
 		lastProjectCwd = applyProjectRefreshToState(state, {
 			cwd: ctx.cwd,
@@ -120,7 +123,9 @@ export default function (pi: ExtensionAPI) {
 	const refreshInteractiveState = (ctx: ExtensionContext, project = false) => {
 		if (!ctx.hasUI) return;
 		syncFooterState(ctx);
-		if (project && currentConfig.features.statusLine) scheduleProjectRefresh(ctx);
+		if (project && currentConfig.features.statusLine && currentConfig.footerLayout !== "agent") {
+			scheduleProjectRefresh(ctx);
+		}
 		refresh();
 	};
 
@@ -133,6 +138,19 @@ export default function (pi: ExtensionAPI) {
 	const startSessionTimer = () => {
 		stopSessionTimer();
 		lastDurationLabel = "";
+		const segments = currentConfig.footerSegments;
+		const formatNeedsTimer =
+			currentConfig.footerFormat &&
+			/\$\{?(?:time|session_duration|duration)\b/.test(currentConfig.footerFormat);
+		if (
+			!(
+				currentConfig.footerLayout !== "agent" &&
+				currentConfig.features.statusLine &&
+				(segments.sessionDuration || segments.time || formatNeedsTimer)
+			)
+		) {
+			return;
+		}
 		const timer = setInterval(() => {
 			const segments = currentConfig.footerSegments;
 			const formatNeedsTimer =
@@ -266,6 +284,16 @@ export default function (pi: ExtensionAPI) {
 		return true;
 	};
 
+	const installAgentHeader = (ctx: ExtensionContext) => {
+		if (headerController) return;
+		headerController = installHeader(ctx);
+	};
+
+	const uninstallAgentHeader = () => {
+		headerController?.dispose();
+		headerController = undefined;
+	};
+
 	const installStatusLine = (ctx: ExtensionContext) => {
 		if (footerInstalled) return;
 		installFooter(ctx, state, getCurrentConfig, {
@@ -276,13 +304,15 @@ export default function (pi: ExtensionAPI) {
 			setExtensionStatusesGetter(fn) {
 				getActiveExtensionStatuses = fn ?? (() => new Map());
 			},
-		});
+		}, getThinkingLevel);
 		footerInstalled = true;
 		stopProjectRefresh();
-		stopRefreshInterval = startProjectRefreshInterval(currentConfig.projectRefreshIntervalMs, () =>
-			scheduleProjectRefresh(ctx),
-		);
-		scheduleProjectRefresh(ctx, { force: true });
+		if (currentConfig.footerLayout !== "agent") {
+			stopRefreshInterval = startProjectRefreshInterval(currentConfig.projectRefreshIntervalMs, () =>
+				scheduleProjectRefresh(ctx),
+			);
+			scheduleProjectRefresh(ctx, { force: true });
+		}
 		refresh();
 		startSessionTimer();
 	};
@@ -300,6 +330,11 @@ export default function (pi: ExtensionAPI) {
 		const result: ApplyUiResult = { editorBlocked: false };
 		if (!isTuiContext(ctx)) return result;
 		activeTheme = ctx.ui.theme;
+		if (currentConfig.footerLayout === "agent") {
+			installAgentHeader(ctx);
+		} else {
+			uninstallAgentHeader();
+		}
 		if (currentConfig.features.editor) {
 			const currentFactory = ctx.ui.getEditorComponent();
 			const editorMissingOrReplaced = !editorInstalled || !isZentuiEditorFactory(currentFactory);
@@ -343,6 +378,7 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const cleanupUi = (ctx?: ExtensionContext) => {
+		uninstallAgentHeader();
 		uninstallPrototypePatches();
 		stopSessionTimer();
 		stopProjectRefresh();
@@ -437,6 +473,7 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	pi.on("agent_start", syncInteractiveState);
+	pi.on("input", () => headerController?.compact());
 	pi.on("agent_end", syncInteractiveAndProjectState);
 	pi.on("model_select", syncInteractiveState);
 	pi.on("thinking_level_select", syncInteractiveState);

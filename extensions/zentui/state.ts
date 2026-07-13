@@ -12,6 +12,7 @@ import type { RuntimeInfo } from "./runtime";
 export type FooterState = GitStatusSummary & {
 	modelLabel: string;
 	providerLabel: string;
+	modelProviderId: string;
 	contextLabel: string;
 	tokenLabel: string;
 	costLabel: string;
@@ -23,6 +24,7 @@ export function createInitialState(gitDefaults: GitStatusSummary): FooterState {
 	return {
 		modelLabel: "no-model",
 		providerLabel: "Unknown",
+		modelProviderId: "",
 		contextLabel: "--",
 		tokenLabel: "↑0 ↓0",
 		costLabel: "$0.000",
@@ -36,6 +38,7 @@ export function syncState(state: FooterState, ctx: ExtensionContext, cacheHitIco
 	const totals = getUsageTotals(ctx);
 	state.modelLabel = ctx.model?.id ?? "no-model";
 	state.providerLabel = formatProviderLabel(ctx.model?.provider);
+	state.modelProviderId = ctx.model?.provider ?? "";
 	state.contextLabel = buildContextLabel(ctx);
 	state.tokenLabel = buildTokenLabel(totals, cacheHitIcon);
 	state.costLabel = buildCostLabel(totals);
