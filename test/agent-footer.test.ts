@@ -59,4 +59,13 @@ describe("agent footer labels", () => {
 			risk: "⚠ YOLO",
 		});
 	});
+
+	it("ignores ordinary permission and unrelated extension statuses", () => {
+		expect(
+			labels(160, new Map([
+				["permissions", "RW"],
+				["subagents", "3 active"],
+			])),
+		).not.toHaveProperty("risk");
+	});
 });

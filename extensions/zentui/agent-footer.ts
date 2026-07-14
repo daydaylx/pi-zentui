@@ -146,7 +146,11 @@ function fitLabels(labels: AgentFooterLabels, width: number): AgentFooterLabels 
 
 export function resolveAgentFooterLabels(input: AgentFooterInput): AgentFooterLabels {
 	const workflow = normalizedWorkflow(input.statuses.get("workflow"));
-	const risk = sanitizeExtensionStatusText(input.statuses.get("permissions") ?? "") || undefined;
+	const permissionStatus = sanitizeExtensionStatusText(input.statuses.get("permissions") ?? "");
+	const risk =
+		permissionStatus === "⚠ FULL ACCESS" || permissionStatus === "⚠ YOLO"
+			? permissionStatus
+			: undefined;
 	const thinking = normalizedThinkingLevel(input.thinkingLevel);
 	const variants: AgentFooterVariant[] = ["wide", "medium", "narrow"];
 
